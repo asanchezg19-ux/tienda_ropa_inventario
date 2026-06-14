@@ -2,9 +2,8 @@
 
 Este módulo implementa el stack de observabilidad para nuestro Sistema de Gestión de Inventario de Tienda de Ropa. Donde el stock, los pedidos y las actualizaciones de catálogo ocurren en tiempo real, no basta con desplegar la aplicación; es obligatorio garantizar que toda la infraestructura sea reproducible y monitoreable a través de código.
 
-## Integrantes
+## Alumna
 * Sanchez Guzman Ana Cristina
-* Mendoza Bacilio Brayan
 
 ---
 
