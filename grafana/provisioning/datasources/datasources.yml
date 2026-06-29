@@ -1,17 +1,35 @@
+# ═══════════════════════════════════════════════════════════════
+#  GRAFANA — PROVISIONING DE FUENTES DE DATOS
+#  Sistema de Gestión de Inventario — Tienda de Ropa Local
+# ═══════════════════════════════════════════════════════════════
 apiVersion: 1
 
 datasources:
+
+  # ── PROMETHEUS — métricas del backend ─────────────────────
   - name: Prometheus
     type: prometheus
-    access: proxy
+    uid: prometheus-uid
+    # Nombre de servicio Docker 
     url: http://prometheus:9090
-    uid: prometheus
+    access: proxy
     isDefault: true
+    editable: false
     jsonData:
-      timeInterval: 5s
+      # Intervalo mínimo de consulta 
+      timeInterval: "15s"
+      # Habilitar ejemplares para trazas 
 
+  # ── LOKI — logs estructurados del backend ─────────────────
   - name: Loki
     type: loki
-    access: proxy
+    uid: loki-uid
+    # Nombre de servicio Docker
     url: http://loki:3100
-    uid: loki
+    access: proxy
+    isDefault: false
+    editable: false
+    jsonData:
+      # Límite de líneas por consulta 
+      maxLines: 1000
+

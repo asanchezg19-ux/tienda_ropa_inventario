@@ -1,40 +1,115 @@
+# ═══════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE LOKI
+#  Sistema de Gestión de Inventario — Tienda de Ropa Local
+# ═══════════════════════════════════════════════════════════════
+
 auth_enabled: false
 
+# ─────────────────────────────────────────────
+#  SERVIDOR
+# ─────────────────────────────────────────────
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
+  # Reducir logs internos de Loki para no saturar stdout
   log_level: warn
 
-common:
-  instance_addr: 127.0.0.1
-  path_prefix: /loki
+# ─────────────────────────────────────────────
+#  INGESTER — recibe y agrupa los logs antes
+#  de escribirlos al almacenamiento
+# ─────────────────────────────────────────────
+ingester:
+  # Cuánto tiempo espera antes de volcar un chunk al disco
+  chunk_idle_period: 3m
+  # Tamaño máximo de chunk en memoria antes de forzar escritura
+  chunk_block_size: 262144
+  # Cuánto tiempo conserva el chunk después de escribirlo
+  chunk_retain_period: 1m
+  # Máximo de chunks en memoria simultáneamente
+  max_chunk_age: 1h
+  wal:
+    enabled: true
+    dir: /loki/wal
+
+# ─────────────────────────────────────────────
+#  SCHEMA — define cómo se indexan los logs
+# ─────────────────────────────────────────────
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        # Período de rotación de índice: 1 día
+        period: 24h
+
+# ─────────────────────────────────────────────
+#  ALMACENAMIENTO — filesystem local
+#  Usa el volumen loki-data del docker-compose
+# ─────────────────────────────────────────────
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/index
+    cache_location:         /loki/cache
+    # Cada cuánto sincroniza el índice al disco
+    shared_store: filesystem
+  filesystem:
+    directory: /loki/chunks
+
+# ─────────────────────────────────────────────
+#  COMPACTOR — gestiona retención y compactación
+# ─────────────────────────────────────────────
+compactor:
+  working_directory:       /loki/compactor
+  shared_store:            filesystem
+  compaction_interval:     10m
+  retention_enabled:       true
+  # Cada cuánto aplica la política de retención
+  retention_delete_delay:  2h
+  retention_delete_worker_count: 150
+
+# ─────────────────────────────────────────────
+#  LÍMITES
+# ─────────────────────────────────────────────
+limits_config:
+  retention_period:        2160h
+  max_streams_per_user:    1000
+  max_entries_limit_per_query: 5000
+  ingestion_rate_mb:       4
+  ingestion_burst_size_mb: 6
+  max_query_length:        721h
+
+# ─────────────────────────────────────────────
+#  RULER — evaluación de alertas basadas en logs
+#  (deshabilitado: usamos Prometheus para alertas)
+# ─────────────────────────────────────────────
+ruler:
   storage:
-    filesystem:
-      chunks_directory: /loki/chunks
-      rules_directory: /loki/rules
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path:     /loki/rules-temp
+  enable_api:    true
+
+# ─────────────────────────────────────────────
+#  CONFIGURACIÓN COMÚN
+# ─────────────────────────────────────────────
+common:
   replication_factor: 1
   ring:
+    instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
 
-schema_config:
-  configs:
-    - from: 2024-01-01
-      store: tsdb
-      object_store: filesystem
-      schema: v13
-      index:
-        prefix: index_
-        period: 24h
-
-limits_config:
-  retention_period: 168h
-  allow_structured_metadata: true
-  volume_enabled: true
+chunk_store_config:
+  max_look_back_period: 2160h
 
 query_range:
   results_cache:
     cache:
       embedded_cache:
         enabled: true
-        max_size_mb: 100
+        # Máximo 50MB de caché de consultas en RAM
+        max_size_mb: 50
