@@ -1,137 +1,213 @@
-# Laboratorio de Observabilidad — Infraestructura como Código
-# Levanta apps (backend + frontend) y el stack completo: Prometheus, Loki,
-# Alloy, Grafana, node-exporter y cAdvisor + Servidor de Calidad SonarQube.
-#
-#   docker compose up -d --build      # levantar todo
-#   docker compose down               # detener (conserva dashboards de Grafana)
-#   docker compose down -v            # detener y borrar datos (reset total)
+version: "3.8"
 
+# ─────────────────────────────────────────────
+#  RED ÚNICA: todos los servicios se comunican
+#  por nombre (backend, loki, prometheus, etc.)
+# ─────────────────────────────────────────────
+networks:
+  tienda-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────
+#  VOLÚMENES PERSISTENTES
+# ─────────────────────────────────────────────
+volumes:
+  postgres-data:       # datos de SonarQube
+  sonar-data:          # configuración de SonarQube
+  prometheus-data:     # métricas históricas
+  grafana-data:        # dashboards y configuración
+  loki-data:           # logs almacenados (retención 90 días)
+  backend-data:        # datos JSON de la tienda (inventario, ventas)
+
+# ─────────────────────────────────────────────
+#  SERVICIOS
+# ─────────────────────────────────────────────
 services:
-  # ----------------------------- Aplicaciones -----------------------------
-  backend:
-    build: ./apps/backend
-    container_name: lab-backend
-    ports:
-      - "3001:3001"
-    restart: unless-stopped
 
-  frontend:
-    build: ./apps/frontend
-    container_name: lab-frontend
-    environment:
-      - BACKEND_URL=http://backend:3001
-    ports:
-      - "8080:8080"
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  # --- Servidor de Calidad SonarQube (Agregado para la tarea) ---
-  sonarqube:
-    image: sonarqube:community
-    container_name: sonarqube
-    depends_on:
-      - sonarqube_db
-    ports:
-      - "9000:9000"
-    environment:
-      SONAR_JDBC_URL: jdbc:postgresql://sonarqube_db:5432/sonarqube
-      SONAR_JDBC_USERNAME: sonar
-      SONAR_JDBC_PASSWORD: sonar
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_extensions:/opt/sonarqube/extensions
-      - sonarqube_logs:/opt/sonarqube/logs
-    restart: unless-stopped
-
-  sonarqube_db:
-    image: postgres:16
-    container_name: sonarqube_db
+  # ── BASE DE DATOS (solo para SonarQube) ────
+  postgres:
+    image: postgres:15-alpine
+    container_name: tienda-postgres
     environment:
       POSTGRES_USER: sonar
       POSTGRES_PASSWORD: sonar
       POSTGRES_DB: sonarqube
     volumes:
-      - postgresql_data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - tienda-net
+    mem_limit: 256m
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # ----------------------------- Métricas -----------------------------
-  prometheus:
-    image: prom/prometheus:v3.8.1
-    container_name: lab-prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
+  # ── ANÁLISIS DE CALIDAD ─────────────────────
+  sonarqube:
+    image: sonarqube:10-community
+    container_name: tienda-sonar
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+      # Reducir memoria para laptops con recursos limitados
+      SONAR_CE_JAVAOPTS: "-Xmx256m"
+      SONAR_WEB_JAVAOPTS: "-Xmx256m"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
+      - sonar-data:/opt/sonarqube/data
     ports:
-      - "9090:9090"
+      - "9000:9000"
+    networks:
+      - tienda-net
+    mem_limit: 768m
     restart: unless-stopped
 
-  node-exporter:
-    image: prom/node-exporter:v1.8.2
-    container_name: lab-node-exporter
-    ports:
-      - "9100:9100"
-    restart: unless-stopped
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    container_name: lab-cadvisor
-    privileged: true
-    ports:
-      - "8081:8080"
-    restart: unless-stopped
-
-  # ----------------------------- Logs -----------------------------
+  # ── ALMACÉN DE LOGS ─────────────────────────
+  # Loki debe arrancar antes que Alloy para recibir logs
   loki:
-    image: grafana/loki:3.4.0
-    container_name: lab-loki
+    image: grafana/loki:2.9.4
+    container_name: tienda-loki
     command: -config.file=/etc/loki/loki-config.yaml
     volumes:
       - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
     ports:
       - "3100:3100"
+    networks:
+      - tienda-net
+    mem_limit: 256m
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ── RECOLECTOR DE LOGS ──────────────────────
+  # Alloy recoge logs del backend y los envía a Loki
   alloy:
-    image: grafana/alloy:v1.10.0
-    container_name: lab-alloy
-    command:
-      - run
-      - --server.http.listen-addr=0.0.0.0:12345
-      - /etc/alloy/config.alloy
+    image: grafana/alloy:v1.3.1
+    container_name: tienda-alloy
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    depends_on:
+      loki:
+        condition: service_healthy
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Acceso a los logs del backend dentro del contenedor
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "12345:12345"
-    depends_on:
-      - loki
+    networks:
+      - tienda-net
+    mem_limit: 128m
     restart: unless-stopped
 
-  # ----------------------------- Visualización -----------------------------
-  grafana:
-    image: grafana/grafana:12.4.0
-    container_name: lab-grafana
+  # ── BACKEND (API REST) ──────────────────────
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: tienda-backend
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_DEFAULT_THEME=light
+      NODE_ENV: production
+      PORT: 4000
+      # Secret para JWT (en producción real va en .env)
+      JWT_SECRET: tienda_ropa_secret_2026
+      # Umbral de stock crítico (RNF-10 / RF)
+      STOCK_MINIMO: 3
+    volumes:
+      # Persistencia de datos JSON de la tienda
+      - backend-data:/app/data
+    ports:
+      - "4000:4000"
+    networks:
+      - tienda-net
+    mem_limit: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:4000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    # Etiquetas para que Alloy identifique este contenedor
+    labels:
+      logging: "promtail"
+      app: "tienda-backend"
+
+  # ── FRONTEND (interfaz web) ─────────────────
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: tienda-frontend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # URL del backend (nombre del servicio en la red Docker)
+      BACKEND_URL: http://backend:4000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - tienda-net
+    mem_limit: 128m
+    restart: unless-stopped
+    labels:
+      logging: "promtail"
+      app: "tienda-frontend"
+
+  # ── RECOLECTOR DE MÉTRICAS ──────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: tienda-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      # Retención de métricas: 15 días (suficiente para el curso)
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alertas.yml:/etc/prometheus/alertas.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - tienda-net
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # ── VISUALIZACIÓN ───────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: tienda-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Reducir logs de Grafana
+      GF_LOG_LEVEL: warn
+    depends_on:
+      - prometheus
+      - loki
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-      - loki
+      - "3001:3000"
+    networks:
+      - tienda-net
+    mem_limit: 256m
     restart: unless-stopped
-
-volumes:
-  prometheus-data:
-  grafana-data:
-  sonarqube_data:
-  sonarqube_extensions:
-  sonarqube_logs:
-  postgresql_data:

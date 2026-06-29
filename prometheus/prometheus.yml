@@ -1,26 +1,50 @@
+# ═══════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE PROMETHEUS
+#  Sistema de Gestión de Inventario — Tienda de Ropa Local
+#
+#  Prometheus recolecta métricas del backend cada 15 segundos
+#  y las almacena para que Grafana las visualice.
+# ═══════════════════════════════════════════════════════════════
+
 global:
-  scrape_interval: 5s
-  evaluation_interval: 5s
+  # Cada cuánto recolecta métricas de los targets
+  scrape_interval: 15s
 
+  # Cada cuánto evalúa las reglas de alerta
+  evaluation_interval: 15s
+
+  # Etiquetas que se añaden a todas las métricas de este servidor
+  external_labels:
+    proyecto: "tienda-ropa-inventario"
+    entorno:  "local"
+
+# ─────────────────────────────────────────────
+#  REGLAS DE ALERTA
+#  Definidas inline para no necesitar archivos
+#  de reglas separados 
+# ─────────────────────────────────────────────
+rule_files:
+  - "/etc/prometheus/alertas.yml"
+
+# ─────────────────────────────────────────────
+#  TARGETS (fuentes de métricas)
+# ─────────────────────────────────────────────
 scrape_configs:
-  - job_name: prometheus
-    static_configs:
-      - targets: ['localhost:9090']
 
-  - job_name: node-exporter
+  # ── El propio Prometheus se monitorea a sí mismo ──
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets: ["localhost:9090"]
+        labels:
+          servicio: "prometheus"
 
-  - job_name: cadvisor
-    static_configs:
-      - targets: ['cadvisor:8080']
-
-  - job_name: backend
-    metrics_path: /metrics
-    static_configs:
-      - targets: ['backend:3001']
-
-  - job_name: frontend
-    metrics_path: /metrics
-    static_configs:
-      - targets: ['frontend:8080']
+  # ── Backend Node.js — fuente principal de métricas ──
+  # Recolecta todas las métricas definidas con prom-client:
+  #   tienda_ventas_total
+  #   tienda_api_duracion_segundos
+  #   tienda_productos_stock_critico
+  #   tienda_errores_total
+  #   tienda_login_fallidos_total
+  #   + métricas por defecto de Node.js (heap, CPU, event loop)
+  - job_name: "tienda-backend"
+    scrape_interval: 15s

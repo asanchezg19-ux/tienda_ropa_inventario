@@ -1,0 +1,102 @@
+# ═══════════════════════════════════════════════════════════════
+#  REGLAS DE ALERTA — PROMETHEUS
+#  Sistema de Gestión de Inventario — Tienda de Ropa Local
+# ═══════════════════════════════════════════════════════════════
+
+groups:
+
+  # ── Grupo: Rendimiento de la API ──────────────────────────
+  - name: rendimiento_api
+    rules:
+
+      # Alerta si el percentil 95 de respuesta supera 2.5s por 2 minutos
+      - alert: TiempoRespuestaAlto
+        expr: |
+          histogram_quantile(
+            0.95,
+            rate(tienda_api_duracion_segundos_bucket[2m])
+          ) > 2.5
+        for: 2m
+        labels:
+          severidad: "advertencia"
+        annotations:
+          summary: "Tiempo de respuesta de la API elevado"
+          description: >
+            El percentil 95 de tiempo de respuesta supera los 2.5 segundos.
+            Valor actual: {{ $value | humanizeDuration }}
+
+      # Alerta crítica si supera los 3 segundos
+      - alert: TiempoRespuestaCritico
+        expr: |
+          histogram_quantile(
+            0.95,
+            rate(tienda_api_duracion_segundos_bucket[2m])
+          ) > 3
+        for: 1m
+        labels:
+          severidad: "critico"
+        annotations:
+          summary: "CRÍTICO — API supera el límite de 3 segundos"
+          description: >
+            El percentil 95 de tiempo de respuesta supera los 3 segundos.
+            Valor actual: {{ $value | humanizeDuration }}
+
+  # ── Grupo: Disponibilidad del backend ─────────────────────
+  - name: disponibilidad
+    rules:
+
+      # Alerta si el backend deja de responder
+      - alert: BackendCaido
+        expr: up{job="tienda-backend"} == 0
+        for: 30s
+        labels:
+          severidad: "critico"
+        annotations:
+          summary: "CRÍTICO — Backend fuera de servicio"
+          description: >
+            El backend no responde desde hace 30 segundos.
+
+  # ── Grupo: Errores internos ───────────────────────────────
+  - name: errores
+    rules:
+
+      # Tasa de errores internos elevada
+      - alert: TasaErroresAlta
+        expr: rate(tienda_errores_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severidad: "advertencia"
+        annotations:
+          summary: "Tasa de errores internos elevada"
+          description: >
+            Se están registrando más de 0.1 errores por segundo
+            en los últimos 5 minutos.
+            Tipo de error: {{ $labels.tipo }}
+
+      # Intentos de login fallidos sospechosos
+      - alert: IntentosFallidosLogin
+        expr: rate(tienda_login_fallidos_total[5m]) > 0.2
+        for: 1m
+        labels:
+          severidad: "advertencia"
+        annotations:
+          summary: "Posible ataque de fuerza bruta detectado"
+          description: >
+            Se detectan más de 0.2 intentos de login fallidos
+            por segundo en los últimos 5 minutos
+
+  # ── Grupo: Stock e inventario ─────────────────────────────
+  - name: inventario
+    rules:
+
+      # Productos con stock crítico
+      - alert: StockCritico
+        expr: tienda_productos_stock_critico > 0
+        for: 1m
+        labels:
+          severidad: "advertencia"
+        annotations:
+          summary: "Productos con stock bajo el nivel mínimo"
+          description: >
+            Hay {{ $value }} producto(s) con stock igual o menor
+            a 3 unidades. Revisar panel de alertas en la aplicación.
