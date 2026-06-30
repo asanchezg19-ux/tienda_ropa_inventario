@@ -1,0 +1,140 @@
+<?xml version="1.0" ?>
+<testsuites disabled="0" errors="0" failures="2" tests="68" time="0.0">
+	<testsuite disabled="0" errors="0" failures="2" name="dockerfile scan" skipped="0" tests="68" time="0">
+		<properties>
+			<property name="directory" value="['/tf']"/>
+			<property name="add_check" value="False"/>
+			<property name="list" value="False"/>
+			<property name="output" value="['junitxml']"/>
+			<property name="output_file_path" value="results.xml"/>
+			<property name="output_bc_ids" value="False"/>
+			<property name="include_all_checkov_policies" value="True"/>
+			<property name="quiet" value="False"/>
+			<property name="compact" value="False"/>
+			<property name="framework" value="['all']"/>
+			<property name="skip_framework" value="[]"/>
+			<property name="run_all_external_checks" value="False"/>
+			<property name="soft_fail" value="False"/>
+			<property name="skip_results_upload" value="False"/>
+			<property name="repo_id" value="cli_repo/tf"/>
+			<property name="branch" value="master"/>
+			<property name="skip_download" value="False"/>
+			<property name="use_enforcement_rules" value="False"/>
+			<property name="external_modules_download_path" value=".external_modules"/>
+			<property name="evaluate_variables" value="True"/>
+			<property name="no_cert_verify" value="False"/>
+			<property name="create_baseline" value="False"/>
+			<property name="output_baseline_as_skipped" value="False"/>
+			<property name="secrets_scan_file_type" value="[]"/>
+			<property name="enable_secret_scan_all_files" value="False"/>
+			<property name="block_list_secret_scan" value="[]"/>
+			<property name="summary_position" value="top"/>
+			<property name="skip_resources_without_violations" value="False"/>
+			<property name="deep_analysis" value="False"/>
+			<property name="no_fail_on_crash" value="False"/>
+			<property name="mask" value="defaultdict(&lt;class 'set'&gt;, {})"/>
+			<property name="scan_secrets_history" value="False"/>
+			<property name="secrets_history_timeout" value="12h"/>
+			<property name="custom_tool_name" value="Checkov"/>
+		</properties>
+		<testcase name="[NONE][CKV_DOCKER_5] Ensure update instructions are not use alone in the Dockerfile" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile." file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_9] Ensure that APT isn't used" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile." file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_11] Ensure From Alias are unique for multistage builds." classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile." file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_7] Ensure the base image uses a non latest version tag" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.FROM" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_1] Ensure port 22 is not exposed" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile." file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_10] Ensure that WORKDIR values are absolute paths" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile." file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_2] Ensure that HEALTHCHECK instructions have been added to container images" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.HEALTHCHECK" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_5] Ensure update instructions are not use alone in the Dockerfile" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile." file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_9] Ensure that APT isn't used" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile." file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_11] Ensure From Alias are unique for multistage builds." classname="/apps/backend/Dockerfile./apps/backend/Dockerfile." file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_7] Ensure the base image uses a non latest version tag" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.FROM" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_1] Ensure port 22 is not exposed" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile." file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_8] Ensure the last USER is not root" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.USER" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_10] Ensure that WORKDIR values are absolute paths" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile." file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_3] Ensure that a user for the container has been created" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.USER" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_1] Ensure that sudo isn't used" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_1] Ensure that sudo isn't used" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_1] Ensure that sudo isn't used" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_16] Ensure that certificate validation isn't disabled with pip via the 'PIP_TRUSTED_HOST' environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_16] Ensure that certificate validation isn't disabled with pip via the 'PIP_TRUSTED_HOST' environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_16] Ensure that certificate validation isn't disabled with pip via the 'PIP_TRUSTED_HOST' environment variable" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_14] Ensure that certificate validation isn't disabled for git by setting the environment variable 'GIT_SSL_NO_VERIFY' to any value" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_14] Ensure that certificate validation isn't disabled for git by setting the environment variable 'GIT_SSL_NO_VERIFY' to any value" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_14] Ensure that certificate validation isn't disabled for git by setting the environment variable 'GIT_SSL_NO_VERIFY' to any value" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_6] Ensure that certificate validation isn't disabled with the NODE_TLS_REJECT_UNAUTHORIZED environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_6] Ensure that certificate validation isn't disabled with the NODE_TLS_REJECT_UNAUTHORIZED environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_6] Ensure that certificate validation isn't disabled with the NODE_TLS_REJECT_UNAUTHORIZED environment variable" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_12] Ensure that certificate validation isn't disabled for npm via the 'NPM_CONFIG_STRICT_SSL' environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_12] Ensure that certificate validation isn't disabled for npm via the 'NPM_CONFIG_STRICT_SSL' environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_12] Ensure that certificate validation isn't disabled for npm via the 'NPM_CONFIG_STRICT_SSL' environment variable" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_5] Ensure that certificate validation isn't disabled with the PYTHONHTTPSVERIFY environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_5] Ensure that certificate validation isn't disabled with the PYTHONHTTPSVERIFY environment variable" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_5] Ensure that certificate validation isn't disabled with the PYTHONHTTPSVERIFY environment variable" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_2] Ensure that certificate validation isn't disabled with curl" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_2] Ensure that certificate validation isn't disabled with curl" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_2] Ensure that certificate validation isn't disabled with curl" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_3] Ensure that certificate validation isn't disabled with wget" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_3] Ensure that certificate validation isn't disabled with wget" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_3] Ensure that certificate validation isn't disabled with wget" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_9] Ensure that packages with untrusted or missing GPG signatures are not used by dnf, tdnf, or yum via the '--nogpgcheck' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_9] Ensure that packages with untrusted or missing GPG signatures are not used by dnf, tdnf, or yum via the '--nogpgcheck' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_9] Ensure that packages with untrusted or missing GPG signatures are not used by dnf, tdnf, or yum via the '--nogpgcheck' option" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_17] Ensure that 'chpasswd' is not used to set or remove passwords" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_17] Ensure that 'chpasswd' is not used to set or remove passwords" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_17] Ensure that 'chpasswd' is not used to set or remove passwords" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_13] Ensure that certificate validation isn't disabled for npm or yarn by setting the option strict-ssl to false" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_13] Ensure that certificate validation isn't disabled for npm or yarn by setting the option strict-ssl to false" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_13] Ensure that certificate validation isn't disabled for npm or yarn by setting the option strict-ssl to false" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_11] Ensure that the '--force-yes' option is not used, as it disables signature validation and allows packages to be downgraded which can leave the system in a broken or inconsistent state" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_11] Ensure that the '--force-yes' option is not used, as it disables signature validation and allows packages to be downgraded which can leave the system in a broken or inconsistent state" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_11] Ensure that the '--force-yes' option is not used, as it disables signature validation and allows packages to be downgraded which can leave the system in a broken or inconsistent state" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_4] Ensure that certificate validation isn't disabled with the pip '--trusted-host' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_4] Ensure that certificate validation isn't disabled with the pip '--trusted-host' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_4] Ensure that certificate validation isn't disabled with the pip '--trusted-host' option" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_7] Ensure that packages with untrusted or missing signatures are not used by apk via the '--allow-untrusted' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_7] Ensure that packages with untrusted or missing signatures are not used by apk via the '--allow-untrusted' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_7] Ensure that packages with untrusted or missing signatures are not used by apk via the '--allow-untrusted' option" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_10] Ensure that packages with untrusted or missing signatures are not used by rpm via the '--nodigest', '--nosignature', '--noverify', or '--nofiledigest' options" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_10] Ensure that packages with untrusted or missing signatures are not used by rpm via the '--nodigest', '--nosignature', '--noverify', or '--nofiledigest' options" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_10] Ensure that packages with untrusted or missing signatures are not used by rpm via the '--nodigest', '--nosignature', '--noverify', or '--nofiledigest' options" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_15] Ensure that the yum and dnf package managers are not configured to disable SSL certificate validation via the 'sslverify' configuration option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_15] Ensure that the yum and dnf package managers are not configured to disable SSL certificate validation via the 'sslverify' configuration option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_15] Ensure that the yum and dnf package managers are not configured to disable SSL certificate validation via the 'sslverify' configuration option" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_8] Ensure that packages with untrusted or missing signatures are not used by apt-get via the '--allow-unauthenticated' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_8] Ensure that packages with untrusted or missing signatures are not used by apt-get via the '--allow-unauthenticated' option" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile.RUN" file="/apps/frontend/Dockerfile"/>
+		<testcase name="[NONE][CKV2_DOCKER_8] Ensure that packages with untrusted or missing signatures are not used by apt-get via the '--allow-unauthenticated' option" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile.RUN" file="/apps/backend/Dockerfile"/>
+		<testcase name="[NONE][CKV_DOCKER_3] Ensure that a user for the container has been created" classname="/apps/frontend/Dockerfile./apps/frontend/Dockerfile." file="/apps/frontend/Dockerfile">
+			<failure type="failure" message="Ensure that a user for the container has been created">
+Resource: /apps/frontend/Dockerfile.
+File: /apps/frontend/Dockerfile: 1-10
+Guideline: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/docker-policies/docker-policy-index/ensure-that-a-user-for-the-container-has-been-created
+
+		1  | FROM node:20-alpine
+		2  | RUN apk add --no-cache curl
+		3  | WORKDIR /app
+		4  | COPY package.json ./
+		5  | RUN npm install --omit=dev
+		6  | COPY . .
+		7  | EXPOSE 8080
+		8  | HEALTHCHECK --interval=30s --timeout=3s \
+		9  |   CMD curl -f http://localhost:8080/ || exit 1
+		10 | CMD [&quot;node&quot;, &quot;server.js&quot;]</failure>
+		</testcase>
+		<testcase name="[NONE][CKV_DOCKER_2] Ensure that HEALTHCHECK instructions have been added to container images" classname="/apps/backend/Dockerfile./apps/backend/Dockerfile." file="/apps/backend/Dockerfile">
+			<failure type="failure" message="Ensure that HEALTHCHECK instructions have been added to container images">
+Resource: /apps/backend/Dockerfile.
+File: /apps/backend/Dockerfile: 1-8
+Guideline: https://docs.prismacloud.io/en/enterprise-edition/policy-reference/docker-policies/docker-policy-index/ensure-that-healthcheck-instructions-have-been-added-to-container-images
+
+		1 | FROM node:20-alpine
+		2 | WORKDIR /app
+		3 | COPY --chown=node:node package.json ./
+		4 | RUN npm install --omit=dev
+		5 | COPY --chown=node:node . .
+		6 | EXPOSE 3001
+		7 | USER node
+		8 | CMD [&quot;node&quot;, &quot;server.js&quot;]
+</failure>
+		</testcase>
+	</testsuite>
+</testsuites>
