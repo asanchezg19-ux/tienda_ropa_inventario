@@ -1,8 +1,5 @@
-version: "3.8"
-
 # ─────────────────────────────────────────────
-#  RED ÚNICA: todos los servicios se comunican
-#  por nombre (backend, loki, prometheus, etc.)
+#  RED ÚNICA: comunicación entre servicios
 # ─────────────────────────────────────────────
 networks:
   tienda-net:
@@ -12,19 +9,19 @@ networks:
 #  VOLÚMENES PERSISTENTES
 # ─────────────────────────────────────────────
 volumes:
-  postgres-data:       # datos de SonarQube
-  sonar-data:          # configuración de SonarQube
-  prometheus-data:     # métricas históricas
-  grafana-data:        # dashboards y configuración
-  loki-data:           # logs almacenados (retención 90 días)
-  backend-data:        # datos JSON de la tienda (inventario, ventas)
+  postgres-data:       # Datos de SonarQube
+  sonar-data:          # Configuración de SonarQube
+  prometheus-data:     # Métricas históricas
+  grafana-data:        # Dashboards y configuración
+  loki-data:           # Logs almacenados
+  backend-data:        # Datos JSON de la tienda (inventario, ventas)
 
 # ─────────────────────────────────────────────
 #  SERVICIOS
 # ─────────────────────────────────────────────
 services:
 
-  # ── BASE DE DATOS (solo para SonarQube) ────
+  # ── BASE DE DATOS (SonarQube) ────
   postgres:
     image: postgres:15-alpine
     container_name: tienda-postgres
@@ -55,7 +52,6 @@ services:
       SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/sonarqube
       SONAR_JDBC_USERNAME: sonar
       SONAR_JDBC_PASSWORD: sonar
-      # Reducir memoria para laptops con recursos limitados
       SONAR_CE_JAVAOPTS: "-Xmx256m"
       SONAR_WEB_JAVAOPTS: "-Xmx256m"
     volumes:
@@ -68,7 +64,6 @@ services:
     restart: unless-stopped
 
   # ── ALMACÉN DE LOGS ─────────────────────────
-  # Loki debe arrancar antes que Alloy para recibir logs
   loki:
     image: grafana/loki:2.9.4
     container_name: tienda-loki
@@ -89,7 +84,6 @@ services:
       retries: 5
 
   # ── RECOLECTOR DE LOGS ──────────────────────
-  # Alloy recoge logs del backend y los envía a Loki
   alloy:
     image: grafana/alloy:v1.3.1
     container_name: tienda-alloy
@@ -99,7 +93,6 @@ services:
         condition: service_healthy
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      # Acceso a los logs del backend dentro del contenedor
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
@@ -118,12 +111,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      # Secret para JWT (en producción real va en .env)
       JWT_SECRET: tienda_ropa_secret_2026
-      # Umbral de stock crítico (RNF-10 / RF)
       STOCK_MINIMO: 3
     volumes:
-      # Persistencia de datos JSON de la tienda
       - backend-data:/app/data
     ports:
       - "4000:4000"
@@ -132,11 +122,11 @@ services:
     mem_limit: 256m
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:4000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:4000/metrics || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
-    # Etiquetas para que Alloy identifique este contenedor
+      start_period: 15s
     labels:
       logging: "promtail"
       app: "tienda-backend"
@@ -150,7 +140,6 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      # URL del backend (nombre del servicio en la red Docker)
       BACKEND_URL: http://backend:4000
     depends_on:
       backend:
@@ -172,7 +161,6 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      # Retención de métricas: 15 días (suficiente para el curso)
       - "--storage.tsdb.retention.time=15d"
       - "--web.enable-lifecycle"
     depends_on:
@@ -197,7 +185,6 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin123
       GF_USERS_ALLOW_SIGN_UP: "false"
-      # Reducir logs de Grafana
       GF_LOG_LEVEL: warn
     depends_on:
       - prometheus

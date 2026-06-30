@@ -18,33 +18,22 @@ global:
     proyecto: "tienda-ropa-inventario"
     entorno:  "local"
 
-# ─────────────────────────────────────────────
-#  REGLAS DE ALERTA
-#  Definidas inline para no necesitar archivos
-#  de reglas separados 
-# ─────────────────────────────────────────────
+
 rule_files:
   - "/etc/prometheus/alertas.yml"
 
-# ─────────────────────────────────────────────
-#  TARGETS (fuentes de métricas)
-# ─────────────────────────────────────────────
+
 scrape_configs:
 
-  # ── El propio Prometheus se monitorea a sí mismo ──
+
   - job_name: "prometheus"
     static_configs:
       - targets: ["localhost:9090"]
         labels:
           servicio: "prometheus"
 
-  # ── Backend Node.js — fuente principal de métricas ──
-  # Recolecta todas las métricas definidas con prom-client:
-  #   tienda_ventas_total
-  #   tienda_api_duracion_segundos
-  #   tienda_productos_stock_critico
-  #   tienda_errores_total
-  #   tienda_login_fallidos_total
-  #   + métricas por defecto de Node.js (heap, CPU, event loop)
+
   - job_name: "tienda-backend"
     scrape_interval: 15s
+    static_configs:
+      - targets: ["backend:4000"]

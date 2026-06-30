@@ -771,7 +771,7 @@ app.use((req, res) => {
 // ═══════════════════════════════════════════════════════════════
 inicializarDatos();
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "::", () => {
   logger.info("Backend iniciado correctamente", {
     puerto: PORT,
     entorno: process.env.NODE_ENV || "development",

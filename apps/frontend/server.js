@@ -1,31 +1,69 @@
 "use strict";
 
 const express = require("express");
-const { createProxyMiddleware } = require("http-proxy-middleware");
 require("dotenv").config();
 
 const app         = express();
 const PORT        = process.env.PORT        || 3000;
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:4000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://backend:4000";
 
-// ─────────────────────────────────────────────
-//  PROXY: todas las llamadas /api/* se redirigen
-//  al backend sin que el navegador lo note.
-//  Esto evita problemas de CORS en producción.
-// ─────────────────────────────────────────────
-app.use(
-  "/api",
-  createProxyMiddleware({
-    target: BACKEND_URL,
-    changeOrigin: true,
-    on: {
-      error: (err, req, res) => {
-        console.error("Error de proxy hacia backend:", err.message);
-        res.status(502).json({ error: "No se puede conectar con el servidor" });
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+function leerCuerpo(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.setEncoding("utf8");
+    req.on("data", chunk => data += chunk);
+    req.on("end", () => resolve(data));
+    req.on("error", reject);
+  });
+}
+
+async function reenviarAPI(req, res, rutaBackend) {
+  try {
+    const body = ["GET", "HEAD"].includes(req.method)
+      ? undefined
+      : (req.body !== undefined ? JSON.stringify(req.body) : await leerCuerpo(req));
+
+    const headers = {};
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value && !["host", "connection", "content-length"].includes(key)) {
+        headers[key] = Array.isArray(value) ? value.join(",") : value;
       }
     }
-  })
-);
+
+    if (!headers["content-type"] && body !== undefined) {
+      headers["content-type"] = "application/json";
+    }
+
+    const response = await fetch(new URL(rutaBackend, BACKEND_URL), {
+      method: req.method,
+      headers,
+      body: body !== undefined ? body : undefined
+    });
+
+    const payload = await response.text();
+    res.status(response.status);
+    res.setHeader("content-type", response.headers.get("content-type") || "application/json");
+    res.send(payload);
+  } catch (err) {
+    console.error("Error de proxy hacia backend:", err.message);
+    res.status(502).json({ error: "No se puede conectar con el servidor" });
+  }
+}
+
+app.post("/api/auth/login", (req, res) => reenviarAPI(req, res, "/api/auth/login"));
+app.get("/api/inventario", (req, res) => reenviarAPI(req, res, "/api/inventario"));
+app.get("/api/inventario/:id", (req, res) => reenviarAPI(req, res, `/api/inventario/${req.params.id}`));
+app.post("/api/inventario", (req, res) => reenviarAPI(req, res, "/api/inventario"));
+app.put("/api/inventario/:id", (req, res) => reenviarAPI(req, res, `/api/inventario/${req.params.id}`));
+app.delete("/api/inventario/:id", (req, res) => reenviarAPI(req, res, `/api/inventario/${req.params.id}`));
+app.post("/api/ventas", (req, res) => reenviarAPI(req, res, "/api/ventas"));
+app.get("/api/ventas", (req, res) => reenviarAPI(req, res, "/api/ventas"));
+app.get("/api/ventas/mis-ventas", (req, res) => reenviarAPI(req, res, "/api/ventas/mis-ventas"));
+app.get("/api/reportes/resumen", (req, res) => reenviarAPI(req, res, "/api/reportes/resumen"));
+app.get("/api/health", (req, res) => reenviarAPI(req, res, "/health"));
 
 // ─────────────────────────────────────────────
 //  HTML PRINCIPAL — toda la UI en un template
@@ -606,8 +644,14 @@ let modoEdicion = false;
 // Si no responde, muestra el banner de advertencia.
 let bannerConexion = false;
 
+function apiUrl(path) {
+  return (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://localhost:4000" + path
+    : path;
+}
+
 function verificarConexion() {
-  fetch("/api/health")
+  fetch(apiUrl("/api/health"))
     .then(r => {
       if (r.ok && bannerConexion) {
         document.getElementById("banner-conexion").classList.remove("visible");
@@ -662,7 +706,7 @@ async function hacerLogin() {
   btn.innerHTML = '<span class="spinner"></span>Ingresando...';
 
   try {
-    const resp = await fetch("/api/auth/login", {
+    const resp = await fetch(apiUrl("/api/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ usuario, password })
@@ -747,7 +791,7 @@ async function cargarCatalogo() {
   grid.innerHTML = '<p><span class="spinner"></span>Cargando catálogo...</p>';
 
   try {
-    const resp = await fetch("/api/inventario", {
+    const resp = await fetch(apiUrl("/api/inventario"), {
       headers: { Authorization: "Bearer " + TOKEN }
     });
     const productos = await resp.json();
@@ -879,7 +923,7 @@ async function confirmarVenta() {
   btn.innerHTML = '<span class="spinner"></span>Procesando...';
 
   try {
-    const resp = await fetch("/api/ventas", {
+    const resp = await fetch(apiUrl("/api/ventas"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -912,7 +956,7 @@ async function confirmarVenta() {
 async function cargarMisVentas() {
   const tbody = document.getElementById("tabla-mis-ventas");
   try {
-    const resp   = await fetch("/api/ventas/mis-ventas", { headers: { Authorization: "Bearer " + TOKEN } });
+    const resp   = await fetch(apiUrl("/api/ventas/mis-ventas"), { headers: { Authorization: "Bearer " + TOKEN } });
     const ventas = await resp.json();
 
     if (ventas.length === 0) {
@@ -939,7 +983,7 @@ async function cargarResumen() {
   alertas.innerHTML = '<span class="spinner"></span>';
 
   try {
-    const resp = await fetch("/api/reportes/resumen", { headers: { Authorization: "Bearer " + TOKEN } });
+    const resp = await fetch(apiUrl("/api/reportes/resumen"), { headers: { Authorization: "Bearer " + TOKEN } });
     const data = await resp.json();
 
     cards.innerHTML = \`
@@ -980,7 +1024,7 @@ async function cargarHistorial() {
   tbody.innerHTML = '<tr><td colspan="4"><span class="spinner"></span>Cargando...</td></tr>';
 
   try {
-    const resp   = await fetch("/api/ventas", { headers: { Authorization: "Bearer " + TOKEN } });
+    const resp   = await fetch(apiUrl("/api/ventas"), { headers: { Authorization: "Bearer " + TOKEN } });
     const ventas = await resp.json();
 
     if (ventas.length === 0) {
@@ -1006,7 +1050,7 @@ async function cargarTablaInventario() {
   tbody.innerHTML = '<tr><td colspan="7"><span class="spinner"></span>Cargando...</td></tr>';
 
   try {
-    const resp       = await fetch("/api/inventario", { headers: { Authorization: "Bearer " + TOKEN } });
+    const resp       = await fetch(apiUrl("/api/inventario"), { headers: { Authorization: "Bearer " + TOKEN } });
     const productos  = await resp.json();
 
     tbody.innerHTML = productos.map(p => {
@@ -1062,7 +1106,7 @@ async function guardarProducto() {
     return;
   }
 
-  const url    = modoEdicion ? "/api/inventario/" + id : "/api/inventario";
+  const url    = modoEdicion ? apiUrl("/api/inventario/" + id) : apiUrl("/api/inventario");
   const metodo = modoEdicion ? "PUT" : "POST";
 
   try {
@@ -1087,10 +1131,10 @@ async function guardarProducto() {
 }
 
 async function eliminarProducto(id, nombre) {
-  if (!confirm("¿Eliminar \"" + nombre + "\" del inventario?")) return;
+  if (!confirm("¿Eliminar '" + nombre + "' del inventario?")) return;
 
   try {
-    const resp = await fetch("/api/inventario/" + id, {
+    const resp = await fetch(apiUrl("/api/inventario/" + id), {
       method: "DELETE",
       headers: { Authorization: "Bearer " + TOKEN }
     });
@@ -1119,8 +1163,16 @@ function cerrarSesion() {
 </body>
 </html>`;
 
-// Servir el HTML en todas las rutas (SPA simple)
+// Servir la SPA solo en la ruta raíz; las rutas /api deben pasar al backend.
+app.get("/", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(HTML);
+});
+
 app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "Ruta no encontrada" });
+  }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(HTML);
 });
