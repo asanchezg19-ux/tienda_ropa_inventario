@@ -1,50 +1,143 @@
-// Grafana Alloy: recolecta los logs de TODOS los contenedores vía el socket de
-// Docker y los envía a Loki. Etiqueta cada flujo con el servicio de compose y un
-// "tier" (application | infrastructure) para separar logs de app e infraestructura.
+// ═══════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN DE GRAFANA ALLOY
+//  Sistema de Gestión de Inventario — Tienda de Ropa Local
+//
+//  Pipeline de logs:
+//  Docker stdout → Alloy → parseo JSON → etiquetas → Loki
+//
+//  Alloy lee los logs del contenedor tienda-backend,
+//  los parsea como JSON (formato Winston) y los envía a Loki
+//  con etiquetas que permiten filtrarlos en Grafana.
+// ═══════════════════════════════════════════════════════════════
 
-discovery.docker "containers" {
+// ─────────────────────────────────────────────
+//  PASO 1: DESCUBRIR CONTENEDORES DOCKER
+//  Alloy consulta el socket de Docker para
+//  encontrar los contenedores con la etiqueta
+//  logging="promtail" (definida en docker-compose.yml)
+// ─────────────────────────────────────────────
+discovery.docker "contenedores_tienda" {
   host = "unix:///var/run/docker.sock"
+
+  filter {
+    name   = "label"
+    values = ["logging=promtail"]
+  }
 }
 
-discovery.relabel "containers" {
-  targets = discovery.docker.containers.targets
+// ─────────────────────────────────────────────
+//  PASO 2: TRANSFORMAR METADATOS
+//  Convierte las etiquetas Docker en etiquetas
+//  de Loki legibles para Grafana
+// ─────────────────────────────────────────────
+discovery.relabel "etiquetas_docker" {
+  targets = discovery.docker.contenedores_tienda.targets
 
-  // Nombre del contenedor
+  // Extraer el nombre del contenedor (ej: tienda-backend)
   rule {
     source_labels = ["__meta_docker_container_name"]
     regex         = "/(.*)"
-    target_label  = "container"
+    target_label  = "contenedor"
   }
 
-  // Nombre del servicio definido en docker-compose
+  // Usar la etiqueta "app" definida en docker-compose.yml
+  // (app: "tienda-backend" o "tienda-frontend")
   rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    target_label  = "service"
+    source_labels = ["__meta_docker_container_label_app"]
+    target_label  = "app"
   }
 
-  // Por defecto, todo es infraestructura
+  // Conservar el ID del contenedor para trazabilidad
   rule {
-    target_label = "tier"
-    replacement  = "infrastructure"
-  }
-
-  // backend/frontend se marcan como aplicación
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(lab-backend|lab-frontend)"
-    target_label  = "tier"
-    replacement   = "application"
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "container_id"
   }
 }
 
-loki.source.docker "containers" {
-  host       = "unix:///var/run/docker.sock"
-  targets    = discovery.relabel.containers.output
-  forward_to = [loki.write.default.receiver]
+// ─────────────────────────────────────────────
+//  PASO 3: LEER LOGS DEL STDOUT DE DOCKER
+//  Alloy lee directamente los logs que Docker
+//  captura del stdout de cada contenedor
+// ─────────────────────────────────────────────
+loki.source.docker "logs_docker" {
+  host    = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.etiquetas_docker.output
+
+  // Procesar antes de enviar a Loki
+  forward_to = [loki.process.parsear_json.receiver]
+
+  // Actualizar cada 30 segundos si aparecen nuevos contenedores
+  refresh_interval = "30s"
 }
 
-loki.write "default" {
+// ─────────────────────────────────────────────
+//  PASO 4: PARSEAR JSON Y AGREGAR ETIQUETAS
+//  Winston genera logs en formato JSON:
+//  {
+//    "timestamp": "2026-06-01 10:30:00",
+//    "level":     "warn",
+//    "message":   "ALERTA_STOCK: producto bajo nivel mínimo",
+//    "servicio":  "tienda-backend",
+//    "tipo":      "ALERTA_STOCK",
+//    ...
+//  }
+//  Este bloque extrae campos JSON y los convierte
+//  en etiquetas de Loki para facilitar el filtrado
+// ─────────────────────────────────────────────
+loki.process "parsear_json" {
+
+  // ── Etapa 1: parsear el cuerpo como JSON ──
+  stage.json {
+    expressions = {
+      nivel    = "level",
+      servicio = "servicio",
+      tipo     = "tipo",
+      ruta     = "ruta",
+      metodo   = "metodo",
+    }
+  }
+
+  // ── Etapa 2: promover campos JSON a etiquetas de Loki ──
+  // Esto permite filtrar en Grafana con:
+  // {app="tienda-backend", nivel="warn"}
+  // {app="tienda-backend", tipo="ALERTA_STOCK"}
+  stage.labels {
+    values = {
+      nivel    = "",    // vacío = usar el valor extraído en stage.json
+      servicio = "",
+      tipo     = "",
+    }
+  }
+
+  // ── Etapa 3: filtrar logs de sistema sin contenido útil ──
+  // Descarta líneas vacías o solo con espacios
+  stage.drop {
+    expression  = "^\\s*$"
+    drop_counter_reason = "linea_vacia"
+  }
+
+  // Enviar a Loki después del procesamiento
+  forward_to = [loki.write.enviar_a_loki.receiver]
+}
+
+// ─────────────────────────────────────────────
+//  PASO 5: ENVIAR A LOKI
+//  Escribe los logs procesados en Loki
+//  usando el nombre de servicio Docker
+// ─────────────────────────────────────────────
+loki.write "enviar_a_loki" {
   endpoint {
+    // Nombre de servicio Docker (resuelto en tienda-net)
     url = "http://loki:3100/loki/api/v1/push"
+
+    // Reintentar si Loki no responde temporalmente
+    // (por ejemplo durante el arranque del ecosistema)
+    retry_on_http_429 = true
+  }
+
+  // Etiquetas externas que se agregan a TODOS los logs
+  external_labels = {
+    proyecto = "tienda-ropa-inventario",
+    entorno  = "local",
   }
 }
