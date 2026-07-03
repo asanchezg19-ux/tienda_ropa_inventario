@@ -421,7 +421,7 @@ function solodueno(req, res, next) {
 
 // Health check — usado por Docker Compose para saber si el
 // backend está listo antes de arrancar frontend y prometheus
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.json({
     estado: "ok",
     servicio: "tienda-backend",
