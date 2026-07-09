@@ -1,0 +1,45 @@
+service: tienda-ropa-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1 
+  deploymentMethod: direct 
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:us-east-1:*:table/InventarioTienda
+            - arn:aws:dynamodb:us-east-1:*:table/VentasTienda 
+  environment:
+    PERSISTENCE_MODE: cloud   
+    JWT_SECRET: tienda_ropa_secret_2026
+    STOCK_MINIMO: 3
+
+functions:
+  api:
+    handler: server.handler 
+    memorySize: 512 
+    timeout: 10 
+    events:
+      - http:
+          path: /
+          method: any
+          cors: true
+      - http:
+          path: /{proxy+} 
+          method: any
+          cors: true
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/nodemon/**'

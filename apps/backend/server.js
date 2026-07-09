@@ -17,6 +17,7 @@ const promClient   = require("prom-client");
 require("dotenv").config();
 
 const app         = express();
+const db          = require("./db");
 const PORT        = process.env.PORT        || 4000;
 const JWT_SECRET  = process.env.JWT_SECRET  || "tienda_ropa_secret_2026";
 const STOCK_MIN   = parseInt(process.env.STOCK_MINIMO || "3", 10);
@@ -105,22 +106,36 @@ function asegurarDirectorio() {
   }
 }
 
-function leerJSON(archivo, valorPorDefecto) {
+async function leerJSON(archivo, valorPorDefecto) {
   try {
+    if (archivo === INVENTARIO_FILE) {
+      return await db.obtenerDatos(INVENTARIO_FILE, "InventarioTienda", valorPorDefecto);
+    }
+    if (archivo === VENTAS_FILE) {
+      return await db.obtenerDatos(VENTAS_FILE, "VentasTienda", valorPorDefecto);
+    }
     if (!fs.existsSync(archivo)) return valorPorDefecto;
     return JSON.parse(fs.readFileSync(archivo, "utf8"));
   } catch (err) {
-    logger.error("Error leyendo archivo JSON", { archivo, error: err.message });
+    logger.error("Error leyendo datos", { archivo, error: err.message });
     contadorErrores.inc({ tipo: "lectura_datos" });
     return valorPorDefecto;
   }
 }
 
-function escribirJSON(archivo, datos) {
+async function escribirJSON(archivo, datos, registroIndividual = null) {
   try {
+    if (archivo === INVENTARIO_FILE) {
+      await db.guardarDatos(INVENTARIO_FILE, "InventarioTienda", datos);
+      return;
+    }
+    if (archivo === VENTAS_FILE) {
+      await db.guardarDatos(VENTAS_FILE, "VentasTienda", datos, registroIndividual);
+      return;
+    }
     fs.writeFileSync(archivo, JSON.stringify(datos, null, 2), "utf8");
   } catch (err) {
-    logger.error("Error escribiendo archivo JSON", { archivo, error: err.message });
+    logger.error("Error escribiendo datos", { archivo, error: err.message });
     contadorErrores.inc({ tipo: "escritura_datos" });
     throw err;
   }
@@ -238,33 +253,30 @@ function inicializarDatos() {
 //  Si una venta falla al guardarse, se pone en cola y se reintenta.
 //  El procesador revisa la cola cada 30 segundos.
 // ═══════════════════════════════════════════════════════════════
-function encolarVenta(ventaData) {
-  const cola = leerJSON(COLA_FILE, []);
+async function encolarVenta(ventaData) {
+  const cola = await leerJSON(COLA_FILE, []); 
   cola.push({
     id: uuidv4(),
     datos: ventaData,
     intentos: 0,
     creadoEn: new Date().toISOString()
   });
-  escribirJSON(COLA_FILE, cola);
+  await escribirJSON(COLA_FILE, cola); 
   logger.warn("Venta encolada para reintento", { ventaId: ventaData.id });
 }
 
-function procesarColaPendiente() {
-  const cola = leerJSON(COLA_FILE, []);
+async function procesarColaPendiente() {
+  const cola = await leerJSON(COLA_FILE, []); 
   if (cola.length === 0) return;
-
   logger.info("Procesando cola de ventas pendientes", { pendientes: cola.length });
   const pendientes = [];
-
   for (const item of cola) {
     try {
-      const ventas = leerJSON(VENTAS_FILE, []);
-      // Evitar duplicados (si ya fue procesada en un reintento anterior)
+      const ventas = await leerJSON(VENTAS_FILE, []); 
       const yaExiste = ventas.find(v => v.id === item.datos.id);
       if (!yaExiste) {
         ventas.push(item.datos);
-        escribirJSON(VENTAS_FILE, ventas);
+        await escribirJSON(VENTAS_FILE, ventas); 
         logger.info("Venta pendiente procesada exitosamente", {
           ventaId: item.datos.id,
           intentos: item.intentos + 1
@@ -272,7 +284,6 @@ function procesarColaPendiente() {
       }
     } catch (err) {
       item.intentos += 1;
-      // Máximo 3 intentos (como SQS DLQ del informe)
       if (item.intentos < 3) {
         pendientes.push(item);
         logger.warn("Reintento de venta fallido, se volverá a intentar", {
@@ -280,7 +291,6 @@ function procesarColaPendiente() {
           intento: item.intentos
         });
       } else {
-        // Después de 3 intentos: log de error crítico para revisión manual
         logger.error("VENTA FALLIDA TRAS 3 INTENTOS — requiere revisión manual", {
           ventaId: item.datos.id,
           datos: item.datos
@@ -289,8 +299,7 @@ function procesarColaPendiente() {
       }
     }
   }
-
-  escribirJSON(COLA_FILE, pendientes);
+  await escribirJSON(COLA_FILE, pendientes); 
 }
 
 // Procesa la cola cada 30 segundos
@@ -317,8 +326,8 @@ function verificarStockCritico(producto) {
   }
 }
 
-function actualizarGaugeStockCritico() {
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+async function actualizarGaugeStockCritico() {
+  const inventario = await leerJSON(INVENTARIO_FILE, []); // 👈 Agrega await
   const criticos = inventario.filter(p => p.stock <= STOCK_MIN).length;
   gaugeStockCritico.set(criticos);
 }
@@ -479,14 +488,14 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 // GET /api/inventario — ambos roles pueden ver el catálogo
-app.get("/api/inventario", autenticar, (req, res) => {
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+app.get("/api/inventario", autenticar, async (req, res) => {
+  const inventario = await leerJSON(INVENTARIO_FILE, []); 
   res.json(inventario);
 });
 
 // GET /api/inventario/:id — detalle de un producto
-app.get("/api/inventario/:id", autenticar, (req, res) => {
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+app.get("/api/inventario/:id", autenticar, async (req, res) => {
+  const inventario = await leerJSON(INVENTARIO_FILE, []); 
   const producto = inventario.find(p => p.id === req.params.id);
   if (!producto) {
     return res.status(404).json({ error: "Producto no encontrado" });
@@ -495,16 +504,14 @@ app.get("/api/inventario/:id", autenticar, (req, res) => {
 });
 
 // POST /api/inventario — solo dueño puede agregar productos
-app.post("/api/inventario", autenticar, solodueno, (req, res) => {
+app.post("/api/inventario", autenticar, solodueno, async (req, res) => {
   const { nombre, categoria, talla, color, precio, stock, imagen } = req.body;
-
   if (!nombre || !categoria || !talla || precio == null || stock == null) {
     return res.status(400).json({
       error: "Campos requeridos: nombre, categoria, talla, precio, stock"
     });
   }
-
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+  const inventario = await leerJSON(INVENTARIO_FILE, []); 
   const nuevo = {
     id: uuidv4(),
     nombre,
@@ -517,70 +524,56 @@ app.post("/api/inventario", autenticar, solodueno, (req, res) => {
     creadoEn: new Date().toISOString(),
     creadoPor: req.usuario.usuario
   };
-
   inventario.push(nuevo);
-  escribirJSON(INVENTARIO_FILE, inventario);
-
+  await escribirJSON(INVENTARIO_FILE, inventario, nuevo); // 
   verificarStockCritico(nuevo);
-
   logger.info("Producto agregado al inventario", {
     productoId: nuevo.id,
     nombre: nuevo.nombre,
     por: req.usuario.usuario
   });
-
   res.status(201).json(nuevo);
 });
 
 // PUT /api/inventario/:id — solo dueño puede modificar precio/stock
-app.put("/api/inventario/:id", autenticar, solodueno, (req, res) => {
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+app.put("/api/inventario/:id", autenticar, solodueno, async (req, res) => {
+  const inventario = await leerJSON(INVENTARIO_FILE, []); 
   const idx = inventario.findIndex(p => p.id === req.params.id);
-
   if (idx === -1) {
     return res.status(404).json({ error: "Producto no encontrado" });
   }
-
   const actualizado = {
     ...inventario[idx],
     ...req.body,
-    id: inventario[idx].id,           // ID no se puede cambiar
+    id: inventario[idx].id,
     modificadoEn: new Date().toISOString(),
     modificadoPor: req.usuario.usuario
   };
-
   inventario[idx] = actualizado;
-  escribirJSON(INVENTARIO_FILE, inventario);
-
+  await escribirJSON(INVENTARIO_FILE, inventario, actualizado); 
   verificarStockCritico(actualizado);
-
   logger.info("Producto actualizado", {
     productoId: actualizado.id,
     nombre: actualizado.nombre,
     por: req.usuario.usuario
   });
-
   res.json(actualizado);
 });
 
 // DELETE /api/inventario/:id — solo dueño puede eliminar
-app.delete("/api/inventario/:id", autenticar, solodueno, (req, res) => {
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+app.delete("/api/inventario/:id", autenticar, solodueno, async (req, res) => {
+  const inventario = await leerJSON(INVENTARIO_FILE, []); // 👈 Agrega await
   const idx = inventario.findIndex(p => p.id === req.params.id);
-
   if (idx === -1) {
     return res.status(404).json({ error: "Producto no encontrado" });
   }
-
   const eliminado = inventario.splice(idx, 1)[0];
-  escribirJSON(INVENTARIO_FILE, inventario);
-
+  await escribirJSON(INVENTARIO_FILE, inventario); // 👈 Agrega await
   logger.info("Producto eliminado del inventario", {
     productoId: eliminado.id,
     nombre: eliminado.nombre,
     por: req.usuario.usuario
   });
-
   res.json({ mensaje: "Producto eliminado correctamente", producto: eliminado });
 });
 
@@ -591,32 +584,23 @@ app.delete("/api/inventario/:id", autenticar, solodueno, (req, res) => {
 // POST /api/ventas — ambos roles pueden registrar ventas
 // Esta es la ruta más crítica: implementa RNF-02 (<3s),
 // RNF-05 (cola si falla), RNF-10 (alerta de stock)
-app.post("/api/ventas", autenticar, (req, res) => {
+app.post("/api/ventas", autenticar, async (req, res) => {
   const { items } = req.body;
-  // items = [{ productoId, cantidad }, ...]
-
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "Se requiere al menos un producto en la venta" });
   }
-
-  const inventario = leerJSON(INVENTARIO_FILE, []);
-
-  // Validar stock disponible para todos los items antes de procesar
+  const inventario = await leerJSON(INVENTARIO_FILE, []); // 👈 Agrega await
+  
   for (const item of items) {
     const producto = inventario.find(p => p.id === item.productoId);
     if (!producto) {
-      return res.status(404).json({
-        error: `Producto no encontrado: ${item.productoId}`
-      });
+      return res.status(404).json({ error: `Producto no encontrado: ${item.productoId}` });
     }
     if (producto.stock < item.cantidad) {
-      return res.status(400).json({
-        error: `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock}`
-      });
+      return res.status(400).json({ error: `Stock insuficiente para "${producto.nombre}". Disponible: ${producto.stock}` });
     }
   }
 
-  // Construir la venta
   const venta = {
     id: uuidv4(),
     items: [],
@@ -625,12 +609,10 @@ app.post("/api/ventas", autenticar, (req, res) => {
     fechaHora: new Date().toISOString()
   };
 
-  // Descontar stock y construir detalle de la venta
   for (const item of items) {
     const idx = inventario.findIndex(p => p.id === item.productoId);
     const producto = inventario[idx];
     const subtotal = producto.precio * item.cantidad;
-
     venta.items.push({
       productoId: producto.id,
       nombre: producto.nombre,
@@ -639,79 +621,44 @@ app.post("/api/ventas", autenticar, (req, res) => {
       cantidad: item.cantidad,
       subtotal
     });
-
     venta.total += subtotal;
     inventario[idx].stock -= item.cantidad;
-
-    // Verificar si el nuevo stock es crítico (RNF-10)
     verificarStockCritico(inventario[idx]);
   }
-
   venta.total = parseFloat(venta.total.toFixed(2));
 
-  // Intentar guardar la venta y el inventario actualizado
   try {
-    escribirJSON(INVENTARIO_FILE, inventario);
-    const ventas = leerJSON(VENTAS_FILE, []);
+    await escribirJSON(INVENTARIO_FILE, inventario); 
+    const ventas = await leerJSON(VENTAS_FILE, []); 
     ventas.push(venta);
-    escribirJSON(VENTAS_FILE, ventas);
-
+    await escribirJSON(VENTAS_FILE, ventas, venta); 
     contadorVentas.inc({ vendedor: req.usuario.usuario });
-    actualizarGaugeStockCritico();
-
-    logger.info("Venta registrada exitosamente", {
-      ventaId: venta.id,
-      total: venta.total,
-      vendedor: venta.vendedor,
-      items: venta.items.length
-    });
-
+    await actualizarGaugeStockCritico(); 
+    logger.info("Venta registrada exitosamente", { ventaId: venta.id, total: venta.total, vendedor: venta.vendedor, items: venta.items.length });
     res.status(201).json(venta);
-
   } catch (err) {
-    // Si falla el guardado, encolar para reintento (RNF-05)
-    encolarVenta(venta);
+    await encolarVenta(venta); 
     contadorErrores.inc({ tipo: "venta_encolada" });
-
-    logger.error("Error al guardar venta, encolada para reintento", {
-      ventaId: venta.id,
-      error: err.message
-    });
-
-    // Responder al vendedor que la venta está siendo procesada
-    res.status(202).json({
-      mensaje: "Venta recibida y en proceso. Será confirmada en breve.",
-      ventaId: venta.id
-    });
+    logger.error("Error al guardar venta, encolada para reintento", { ventaId: venta.id, error: err.message });
+    res.status(202).json({ mensaje: "Venta recibida y en proceso. Será confirmada en breve.", ventaId: venta.id });
   }
 });
 
 // GET /api/ventas — solo dueño ve el historial completo (RF-07)
 // Los últimos 90 días disponibles (RNF-12)
-app.get("/api/ventas", autenticar, solodueno, (req, res) => {
-  const ventas = leerJSON(VENTAS_FILE, []);
-
-  // Filtrar por los últimos 90 días (RNF-12)
+app.get("/api/ventas", autenticar, solodueno, async (req, res) => {
+  const ventas = await leerJSON(VENTAS_FILE, []); // 👈 Agrega await
   const hace90Dias = new Date();
   hace90Dias.setDate(hace90Dias.getDate() - 90);
-
-  const ventasFiltradas = ventas.filter(v =>
-    new Date(v.fechaHora) >= hace90Dias
-  );
-
+  const ventasFiltradas = ventas.filter(v => new Date(v.fechaHora) >= hace90Dias);
   res.json(ventasFiltradas);
 });
 
 // GET /api/ventas/mis-ventas — vendedor solo ve sus propias ventas del día
-app.get("/api/ventas/mis-ventas", autenticar, (req, res) => {
-  const ventas = leerJSON(VENTAS_FILE, []);
+app.get("/api/ventas/mis-ventas", autenticar, async (req, res) => {
+  const ventas = await leerJSON(VENTAS_FILE, []); // 👈 Agrega await
   const hoy = new Date().toISOString().split("T")[0];
-
-  const misVentas = ventas.filter(v =>
-    v.vendedor === req.usuario.usuario &&
-    v.fechaHora.startsWith(hoy)
-  );
-
+  const misVentas = ventas.filter(v => v.vendedor === req.usuario.usuario && v.fechaHora.startsWith(hoy));
   res.json(misVentas);
 });
 
@@ -720,26 +667,19 @@ app.get("/api/ventas/mis-ventas", autenticar, (req, res) => {
 // ═══════════════════════════════════════════════════════════════
 
 // GET /api/reportes/resumen — resumen financiero del día
-app.get("/api/reportes/resumen", autenticar, solodueno, (req, res) => {
-  const ventas = leerJSON(VENTAS_FILE, []);
-  const inventario = leerJSON(INVENTARIO_FILE, []);
+app.get("/api/reportes/resumen", autenticar, solodueno, async (req, res) => {
+  const ventas = await leerJSON(VENTAS_FILE, []); // 👈 Agrega await
+  const inventario = await leerJSON(INVENTARIO_FILE, []); // 👈 Agrega await
   const hoy = new Date().toISOString().split("T")[0];
-
   const ventasHoy = ventas.filter(v => v.fechaHora.startsWith(hoy));
   const totalHoy = ventasHoy.reduce((sum, v) => sum + v.total, 0);
   const productosStockCritico = inventario.filter(p => p.stock <= STOCK_MIN);
-
   res.json({
     fecha: hoy,
     ventasHoy: ventasHoy.length,
     ingresosTotalesHoy: parseFloat(totalHoy.toFixed(2)),
     totalProductos: inventario.length,
-    productosStockCritico: productosStockCritico.map(p => ({
-      id: p.id,
-      nombre: p.nombre,
-      talla: p.talla,
-      stock: p.stock
-    }))
+    productosStockCritico: productosStockCritico.map(p => ({ id: p.id, nombre: p.nombre, talla: p.talla, stock: p.stock }))
   });
 });
 
@@ -769,16 +709,23 @@ app.use((req, res) => {
 // ═══════════════════════════════════════════════════════════════
 //  INICIO DEL SERVIDOR
 // ═══════════════════════════════════════════════════════════════
-inicializarDatos();
+async function arrancar() {
+  await inicializarDatos(); // Espera a que los archivos iniciales se comprueben
+  
+  if (db.IS_LOCAL) {
+    // Procesa la cola cada 30 segundos solo en ambiente local
+    setInterval(procesarColaPendiente, 30000);
+    
+    app.listen(PORT, "::", () => {
+      logger.info("Backend iniciado correctamente en Docker Local", { puerto: PORT });
+      actualizarGaugeStockCritico();
+      procesarColaPendiente();
+    });
+  } else {
+    // Configuración especial para AWS Lambda
+    const serverless = require("serverless-http");
+    module.exports.handler = serverless(app);
+  }
+}
 
-app.listen(PORT, "::", () => {
-  logger.info("Backend iniciado correctamente", {
-    puerto: PORT,
-    entorno: process.env.NODE_ENV || "development",
-    stockMinimo: STOCK_MIN
-  });
-  // Primer cálculo del gauge de stock crítico al arrancar
-  actualizarGaugeStockCritico();
-  // Primer procesamiento de la cola al arrancar (por si quedaron pendientes)
-  procesarColaPendiente();
-});
+arrancar();
