@@ -110,6 +110,7 @@ services:
     container_name: tienda-backend
     environment:
       NODE_ENV: production
+      PERSISTENCE_MODE: local
       PORT: 4000
       JWT_SECRET: tienda_ropa_secret_2026
       STOCK_MINIMO: 3
@@ -126,7 +127,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     labels:
       logging: "promtail"
       app: "tienda-backend"
@@ -140,7 +141,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      BACKEND_URL: http://backend:4000
+      BACKEND_URL: https://amazonaws.com
     depends_on:
       backend:
         condition: service_healthy
