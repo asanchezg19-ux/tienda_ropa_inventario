@@ -565,7 +565,7 @@ const HTML = `<!DOCTYPE html>
       <label>Imagen del producto</label>
       <input type="file" id="mp-imagen-input" accept="image/*" onchange="previsualizarImagen(event)" />
       <div id="mp-imagen-preview-wrap" style="margin-top:10px; display:none;">
-        <img id="mp-imagen-preview" alt="Vista previa" style="max-width:100%; max-height:160px; border-radius:8px; display:block; object-fit:cover;" />
+        <img id="mp-imagen-preview" alt="Vista previa" style="max-width:100%; max-height:160px; border-radius:8px; display:block; object-fit:contain;" />
       </div>
     </div>
     <div class="campo">
@@ -584,28 +584,68 @@ const HTML = `<!DOCTYPE html>
         <option>Accesorios</option>
       </select>
     </div>
-    <div class="campo">
-      <label>Talla *</label>
-      <select id="mp-talla">
-        <option value="">Seleccionar...</option>
-        <option>XS</option><option>S</option><option>M</option>
-        <option>L</option><option>XL</option><option>XXL</option>
-        <option>28</option><option>30</option><option>32</option>
-        <option>34</option><option>36</option><option>38</option>
-        <option>Única</option>
-      </select>
+    <!-- Modo EDICIÓN: el producto ya es una talla/color puntual -->
+    <div id="mp-bloque-simple">
+      <div class="campo">
+        <label>Talla *</label>
+        <select id="mp-talla">
+          <option value="">Seleccionar...</option>
+          <option>XS</option><option>S</option><option>M</option>
+          <option>L</option><option>XL</option><option>XXL</option>
+          <option>28</option><option>30</option><option>32</option>
+          <option>34</option><option>36</option><option>38</option>
+          <option>Única</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Color</label>
+        <input type="text" id="mp-color" placeholder="Ej: Azul marino" />
+      </div>
+      <div class="campo">
+        <label>Stock *</label>
+        <input type="number" id="mp-stock" min="0" placeholder="0" />
+      </div>
     </div>
-    <div class="campo">
-      <label>Color</label>
-      <input type="text" id="mp-color" placeholder="Ej: Azul marino" />
+
+    <!-- Modo AGREGAR: se puede crear una talla/color a la vez, o varias combinaciones de una sola vez -->
+    <div id="mp-bloque-variantes">
+      <div class="campo">
+        <label>Tallas disponibles *</label>
+        <div id="mp-tallas-check" style="display:flex; flex-wrap:wrap; gap:10px;">
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="XS" onchange="renderCombinaciones()"> XS</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="S" onchange="renderCombinaciones()"> S</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="M" onchange="renderCombinaciones()"> M</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="L" onchange="renderCombinaciones()"> L</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="XL" onchange="renderCombinaciones()"> XL</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="XXL" onchange="renderCombinaciones()"> XXL</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="28" onchange="renderCombinaciones()"> 28</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="30" onchange="renderCombinaciones()"> 30</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="32" onchange="renderCombinaciones()"> 32</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="34" onchange="renderCombinaciones()"> 34</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="36" onchange="renderCombinaciones()"> 36</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="38" onchange="renderCombinaciones()"> 38</label>
+          <label style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" value="Única" onchange="renderCombinaciones()"> Única</label>
+        </div>
+      </div>
+      <div class="campo">
+        <label>Colores (opcional — agrega uno o varios)</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="mp-color-nuevo" placeholder="Ej: Azul marino" />
+          <button type="button" class="btn btn-primario" onclick="agregarColor()">+ Agregar</button>
+        </div>
+        <div id="mp-colores-chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;"></div>
+      </div>
+      <div class="campo">
+        <label>Stock por combinación *</label>
+        <div id="mp-combinaciones-tabla" style="font-size:0.88rem; color:#636e72;">
+          Selecciona al menos una talla para definir el stock.
+        </div>
+      </div>
     </div>
+
     <div class="campo">
       <label>Precio (S/.) *</label>
       <input type="number" id="mp-precio" min="0" step="0.1" placeholder="0.00" />
-    </div>
-    <div class="campo">
-      <label>Stock *</label>
-      <input type="number" id="mp-stock" min="0" placeholder="0" />
     </div>
     <div class="mensaje" id="msg-modal"></div>
     <div class="modal-footer">
@@ -649,6 +689,8 @@ let carrito     = [];      // Items acumulados para la venta actual
 let productoSeleccionado = null;
 let modoEdicion = false;
 let imagenBase64Pendiente = null; // Foto recién seleccionada, aún sin subir
+let coloresSeleccionados = [];    // Colores agregados en modo "Agregar Producto"
+let stockCombinaciones = {};      // Stock ingresado por combinación talla|color, para no perderlo al re-renderizar
 
 // ── Monitoreo de conexión — RNF-06 ──────────────────────────
 // Verifica cada 10 segundos si el backend responde.
@@ -707,8 +749,8 @@ function bloqueImagen(p) {
   if (!p.imagen) {
     return \`<div class="img-placeholder">\${iconoCategoria(p.categoria)}</div>\`;
   }
-  return \`<div class="img-placeholder" style="padding:0;">
-    <img src="\${p.imagen}" alt="\${p.nombre}" style="width:100%; height:100%; object-fit:cover;"
+  return \`<div class="img-placeholder" style="padding:0; background:#f1f2f6;">
+    <img src="\${p.imagen}" alt="\${p.nombre}" style="width:100%; height:100%; object-fit:contain;"
          onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'img-placeholder', textContent:'\${iconoCategoria(p.categoria)}'}))" />
   </div>\`;
 }
@@ -1107,17 +1149,29 @@ async function cargarTablaInventario() {
 function abrirModalProducto(producto) {
   modoEdicion = !!producto;
   imagenBase64Pendiente = null;
+  coloresSeleccionados = [];
+  stockCombinaciones = {};
   document.getElementById("modal-titulo").textContent = modoEdicion ? "Editar Producto" : "Agregar Producto";
   document.getElementById("mp-id").value       = producto?.id       || "";
   document.getElementById("mp-imagen-url").value = producto?.imagen || "";
   document.getElementById("mp-imagen-input").value = "";
   document.getElementById("mp-nombre").value   = producto?.nombre   || "";
   document.getElementById("mp-categoria").value= producto?.categoria|| "";
-  document.getElementById("mp-talla").value    = producto?.talla    || "";
-  document.getElementById("mp-color").value    = producto?.color    || "";
   document.getElementById("mp-precio").value   = producto?.precio   || "";
-  document.getElementById("mp-stock").value    = producto?.stock    || "";
   document.getElementById("msg-modal").className = "mensaje";
+
+  // Modo edición: talla/color/stock puntuales. Modo alta: selección múltiple.
+  document.getElementById("mp-bloque-simple").style.display     = modoEdicion ? "block" : "none";
+  document.getElementById("mp-bloque-variantes").style.display  = modoEdicion ? "none"  : "block";
+  document.getElementById("mp-talla").value = producto?.talla || "";
+  document.getElementById("mp-color").value = producto?.color || "";
+  document.getElementById("mp-stock").value = producto?.stock ?? "";
+
+  document.querySelectorAll("#mp-tallas-check input[type=checkbox]").forEach(chk => chk.checked = false);
+  document.getElementById("mp-color-nuevo").value = "";
+  renderColoresChips();
+  renderCombinaciones();
+
   const previewWrap = document.getElementById("mp-imagen-preview-wrap");
   if (producto?.imagen) {
     document.getElementById("mp-imagen-preview").src = producto.imagen;
@@ -1126,6 +1180,75 @@ function abrirModalProducto(producto) {
     previewWrap.style.display = "none";
   }
   abrirModal("modal-producto");
+}
+
+// ── Selección de tallas y colores múltiples (modo "Agregar Producto") ──
+function obtenerTallasSeleccionadas() {
+  return Array.from(document.querySelectorAll("#mp-tallas-check input[type=checkbox]:checked")).map(c => c.value);
+}
+
+function agregarColor() {
+  const input = document.getElementById("mp-color-nuevo");
+  const color = input.value.trim();
+  if (!color || coloresSeleccionados.includes(color)) {
+    input.value = "";
+    return;
+  }
+  coloresSeleccionados.push(color);
+  input.value = "";
+  renderColoresChips();
+  renderCombinaciones();
+}
+
+function quitarColor(color) {
+  coloresSeleccionados = coloresSeleccionados.filter(c => c !== color);
+  renderColoresChips();
+  renderCombinaciones();
+}
+
+function renderColoresChips() {
+  const cont = document.getElementById("mp-colores-chips");
+  if (coloresSeleccionados.length === 0) {
+    cont.innerHTML = '<span style="font-size:0.85rem; color:#636e72;">Sin colores agregados (el producto se creará sin color específico)</span>';
+    return;
+  }
+  cont.innerHTML = coloresSeleccionados.map(color => \`
+    <span style="background:#eaf4fb; color:#2980b9; padding:4px 10px; border-radius:20px; font-size:0.85rem; display:flex; align-items:center; gap:6px;">
+      \${color}
+      <button type="button" onclick="quitarColor('\${color}')" style="border:none; background:none; color:#2980b9; cursor:pointer; font-weight:700;">✕</button>
+    </span>\`).join("");
+}
+
+function renderCombinaciones() {
+  const cont    = document.getElementById("mp-combinaciones-tabla");
+  const tallas  = obtenerTallasSeleccionadas();
+  const colores = coloresSeleccionados.length > 0 ? coloresSeleccionados : [""];
+
+  // Guarda lo ya escrito antes de reconstruir la tabla
+  document.querySelectorAll(".mp-combo-stock").forEach(inp => {
+    stockCombinaciones[inp.dataset.clave] = inp.value;
+  });
+
+  if (tallas.length === 0) {
+    cont.innerHTML = "Selecciona al menos una talla para definir el stock.";
+    return;
+  }
+
+  const filas = [];
+  for (const talla of tallas) {
+    for (const color of colores) {
+      const clave = talla + "|" + color;
+      const etiqueta = color ? \`Talla \${talla} · \${color}\` : \`Talla \${talla}\`;
+      const valorPrevio = stockCombinaciones[clave] || "";
+      filas.push(\`
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+          <span>\${etiqueta}</span>
+          <input type="number" min="0" class="mp-combo-stock" data-clave="\${clave}" data-talla="\${talla}" data-color="\${color}"
+                 value="\${valorPrevio}" placeholder="Stock" style="width:110px; padding:6px 10px; border:1.5px solid var(--borde); border-radius:6px;" />
+        </div>\`);
+    }
+  }
+  cont.innerHTML = filas.join("");
 }
 
 function previsualizarImagen(event) {
@@ -1156,18 +1279,64 @@ async function subirImagenSiHaceFalta() {
   return data.url;
 }
 
+async function guardarUnProducto(url, metodo, datos) {
+  const resp = await fetch(url, {
+    method: metodo,
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN },
+    body: JSON.stringify(datos)
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.error || "Error al guardar " + (datos.talla ? "talla " + datos.talla : ""));
+  }
+  return data;
+}
+
 async function guardarProducto() {
   const id       = document.getElementById("mp-id").value;
   const nombre   = document.getElementById("mp-nombre").value.trim();
   const categoria= document.getElementById("mp-categoria").value;
-  const talla    = document.getElementById("mp-talla").value;
-  const color    = document.getElementById("mp-color").value.trim();
   const precio   = parseFloat(document.getElementById("mp-precio").value);
-  const stock    = parseInt(document.getElementById("mp-stock").value, 10);
 
-  if (!nombre || !categoria || !talla || isNaN(precio) || isNaN(stock)) {
+  if (!nombre || !categoria || isNaN(precio)) {
     mostrarMensaje("msg-modal", "Completa todos los campos obligatorios (*)", "error");
     return;
+  }
+
+  // ── Modo edición: un solo producto puntual ──
+  let combinaciones = null;
+  if (modoEdicion) {
+    const talla = document.getElementById("mp-talla").value;
+    const color = document.getElementById("mp-color").value.trim();
+    const stock = parseInt(document.getElementById("mp-stock").value, 10);
+    if (!talla || isNaN(stock)) {
+      mostrarMensaje("msg-modal", "Completa todos los campos obligatorios (*)", "error");
+      return;
+    }
+    combinaciones = [{ talla, color, stock }];
+  } else {
+    // ── Modo alta: una o varias combinaciones de talla/color ──
+    document.querySelectorAll(".mp-combo-stock").forEach(inp => {
+      stockCombinaciones[inp.dataset.clave] = inp.value;
+    });
+    const tallas  = obtenerTallasSeleccionadas();
+    const colores = coloresSeleccionados.length > 0 ? coloresSeleccionados : [""];
+    if (tallas.length === 0) {
+      mostrarMensaje("msg-modal", "Selecciona al menos una talla", "error");
+      return;
+    }
+    combinaciones = [];
+    for (const talla of tallas) {
+      for (const color of colores) {
+        const stockTexto = stockCombinaciones[talla + "|" + color];
+        const stock = parseInt(stockTexto, 10);
+        if (stockTexto === undefined || stockTexto === "" || isNaN(stock) || stock < 0) {
+          mostrarMensaje("msg-modal", "Completa el stock de todas las combinaciones (talla " + talla + (color ? " · " + color : "") + ")", "error");
+          return;
+        }
+        combinaciones.push({ talla, color, stock });
+      }
+    }
   }
 
   const btnGuardar = document.querySelector("#modal-producto .btn-exito");
@@ -1180,19 +1349,17 @@ async function guardarProducto() {
     }
     const imagen = await subirImagenSiHaceFalta();
 
-    const url    = modoEdicion ? apiUrl("/api/inventario/" + id) : apiUrl("/api/inventario");
-    const metodo = modoEdicion ? "PUT" : "POST";
-
-    const resp = await fetch(url, {
-      method: metodo,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN },
-      body: JSON.stringify({ nombre, categoria, talla, color, precio, stock, imagen })
-    });
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      mostrarMensaje("msg-modal", data.error || "Error al guardar", "error");
-      return;
+    if (modoEdicion) {
+      btnGuardar.textContent = "Guardando...";
+      await guardarUnProducto(apiUrl("/api/inventario/" + id), "PUT",
+        { nombre, categoria, precio, imagen, ...combinaciones[0] });
+    } else {
+      for (let i = 0; i < combinaciones.length; i++) {
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = \`Guardando \${i + 1} de \${combinaciones.length}...\`;
+        await guardarUnProducto(apiUrl("/api/inventario"), "POST",
+          { nombre, categoria, precio, imagen, ...combinaciones[i] });
+      }
     }
 
     cerrarModal("modal-producto");
