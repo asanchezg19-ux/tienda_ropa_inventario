@@ -7,8 +7,9 @@ const app         = express();
 const PORT        = process.env.PORT        || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:4000";
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Límite ampliado para poder reenviar imágenes de producto en base64
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 function leerCuerpo(req) {
   return new Promise((resolve, reject) => {
@@ -57,13 +58,14 @@ app.post("/api/auth/login", (req, res) => reenviarAPI(req, res, "/api/auth/login
 app.get("/api/inventario", (req, res) => reenviarAPI(req, res, "/api/inventario"));
 app.get("/api/inventario/:id", (req, res) => reenviarAPI(req, res, `/api/inventario/${req.params.id}`));
 app.post("/api/inventario", (req, res) => reenviarAPI(req, res, "/api/inventario"));
+app.post("/api/inventario/imagenes", (req, res) => reenviarAPI(req, res, "/api/inventario/imagenes"));
 app.put("/api/inventario/:id", (req, res) => reenviarAPI(req, res, `/api/inventario/${req.params.id}`));
 app.delete("/api/inventario/:id", (req, res) => reenviarAPI(req, res, `/api/inventario/${req.params.id}`));
 app.post("/api/ventas", (req, res) => reenviarAPI(req, res, "/api/ventas"));
 app.get("/api/ventas", (req, res) => reenviarAPI(req, res, "/api/ventas"));
 app.get("/api/ventas/mis-ventas", (req, res) => reenviarAPI(req, res, "/api/ventas/mis-ventas"));
 app.get("/api/reportes/resumen", (req, res) => reenviarAPI(req, res, "/api/reportes/resumen"));
-app.get("/api/health", (req, res) => reenviarAPI(req, res, "/health"));
+app.get("/api/health", (req, res) => reenviarAPI(req, res, "/api/health"));
 
 // ─────────────────────────────────────────────
 //  HTML PRINCIPAL — toda la UI en un template
@@ -558,6 +560,14 @@ const HTML = `<!DOCTYPE html>
   <div class="modal">
     <h4 id="modal-titulo">Agregar Producto</h4>
     <input type="hidden" id="mp-id" />
+    <input type="hidden" id="mp-imagen-url" />
+    <div class="campo">
+      <label>Imagen del producto</label>
+      <input type="file" id="mp-imagen-input" accept="image/*" onchange="previsualizarImagen(event)" />
+      <div id="mp-imagen-preview-wrap" style="margin-top:10px; display:none;">
+        <img id="mp-imagen-preview" alt="Vista previa" style="max-width:100%; max-height:160px; border-radius:8px; display:block; object-fit:cover;" />
+      </div>
+    </div>
     <div class="campo">
       <label>Nombre *</label>
       <input type="text" id="mp-nombre" placeholder="Ej: Polo Básica" />
@@ -638,6 +648,7 @@ let USUARIO     = null;
 let carrito     = [];      // Items acumulados para la venta actual
 let productoSeleccionado = null;
 let modoEdicion = false;
+let imagenBase64Pendiente = null; // Foto recién seleccionada, aún sin subir
 
 // ── Monitoreo de conexión — RNF-06 ──────────────────────────
 // Verifica cada 10 segundos si el backend responde.
@@ -688,6 +699,18 @@ function cerrarModal(id) {
 function iconoCategoria(cat) {
   const m = { Tops:"👕", Pantalones:"👖", Faldas:"🩱", Vestidos:"👗", Abrigos:"🧥", Accesorios:"👜" };
   return m[cat] || "🏷️";
+}
+
+// Si el producto tiene una imagen real, se muestra; si no (o si falla
+// la carga), se cae de vuelta al ícono de categoría como respaldo.
+function bloqueImagen(p) {
+  if (!p.imagen) {
+    return \`<div class="img-placeholder">\${iconoCategoria(p.categoria)}</div>\`;
+  }
+  return \`<div class="img-placeholder" style="padding:0;">
+    <img src="\${p.imagen}" alt="\${p.nombre}" style="width:100%; height:100%; object-fit:cover;"
+         onerror="this.replaceWith(Object.assign(document.createElement('div'), {className:'img-placeholder', textContent:'\${iconoCategoria(p.categoria)}'}))" />
+  </div>\`;
 }
 
 // ── LOGIN ────────────────────────────────────────────────────
@@ -826,7 +849,7 @@ async function cargarCatalogo() {
 
       return \`
         <div class="producto-card">
-          <div class="img-placeholder">\${iconoCategoria(p.categoria)}</div>
+          \${bloqueImagen(p)}
           <div class="info">
             <div class="nombre">\${p.nombre}</div>
             <div class="detalle">\${p.categoria} · Talla \${p.talla}</div>
@@ -1083,8 +1106,11 @@ async function cargarTablaInventario() {
 
 function abrirModalProducto(producto) {
   modoEdicion = !!producto;
+  imagenBase64Pendiente = null;
   document.getElementById("modal-titulo").textContent = modoEdicion ? "Editar Producto" : "Agregar Producto";
   document.getElementById("mp-id").value       = producto?.id       || "";
+  document.getElementById("mp-imagen-url").value = producto?.imagen || "";
+  document.getElementById("mp-imagen-input").value = "";
   document.getElementById("mp-nombre").value   = producto?.nombre   || "";
   document.getElementById("mp-categoria").value= producto?.categoria|| "";
   document.getElementById("mp-talla").value    = producto?.talla    || "";
@@ -1092,7 +1118,42 @@ function abrirModalProducto(producto) {
   document.getElementById("mp-precio").value   = producto?.precio   || "";
   document.getElementById("mp-stock").value    = producto?.stock    || "";
   document.getElementById("msg-modal").className = "mensaje";
+  const previewWrap = document.getElementById("mp-imagen-preview-wrap");
+  if (producto?.imagen) {
+    document.getElementById("mp-imagen-preview").src = producto.imagen;
+    previewWrap.style.display = "block";
+  } else {
+    previewWrap.style.display = "none";
+  }
   abrirModal("modal-producto");
+}
+
+function previsualizarImagen(event) {
+  const archivo = event.target.files[0];
+  if (!archivo) return;
+  const lector = new FileReader();
+  lector.onload = () => {
+    imagenBase64Pendiente = lector.result; // data URL en base64
+    document.getElementById("mp-imagen-preview").src = lector.result;
+    document.getElementById("mp-imagen-preview-wrap").style.display = "block";
+  };
+  lector.readAsDataURL(archivo);
+}
+
+async function subirImagenSiHaceFalta() {
+  if (!imagenBase64Pendiente) {
+    return document.getElementById("mp-imagen-url").value || "";
+  }
+  const resp = await fetch(apiUrl("/api/inventario/imagenes"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN },
+    body: JSON.stringify({ imagenBase64: imagenBase64Pendiente })
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.error || "No se pudo subir la imagen");
+  }
+  return data.url;
 }
 
 async function guardarProducto() {
@@ -1109,14 +1170,23 @@ async function guardarProducto() {
     return;
   }
 
-  const url    = modoEdicion ? apiUrl("/api/inventario/" + id) : apiUrl("/api/inventario");
-  const metodo = modoEdicion ? "PUT" : "POST";
+  const btnGuardar = document.querySelector("#modal-producto .btn-exito");
+  const textoOriginalBtn = btnGuardar.textContent;
 
   try {
+    if (imagenBase64Pendiente) {
+      btnGuardar.disabled = true;
+      btnGuardar.textContent = "Subiendo imagen...";
+    }
+    const imagen = await subirImagenSiHaceFalta();
+
+    const url    = modoEdicion ? apiUrl("/api/inventario/" + id) : apiUrl("/api/inventario");
+    const metodo = modoEdicion ? "PUT" : "POST";
+
     const resp = await fetch(url, {
       method: metodo,
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN },
-      body: JSON.stringify({ nombre, categoria, talla, color, precio, stock })
+      body: JSON.stringify({ nombre, categoria, talla, color, precio, stock, imagen })
     });
     const data = await resp.json();
 
@@ -1129,7 +1199,10 @@ async function guardarProducto() {
     cargarTablaInventario();
     cargarCatalogo();
   } catch (err) {
-    mostrarMensaje("msg-modal", "Error de conexión", "error");
+    mostrarMensaje("msg-modal", err.message || "Error de conexión", "error");
+  } finally {
+    btnGuardar.disabled = false;
+    btnGuardar.textContent = textoOriginalBtn;
   }
 }
 
