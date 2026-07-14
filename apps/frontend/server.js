@@ -117,7 +117,7 @@ const HTML = `<!DOCTYPE html>
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: #0f1c3f;
+      background: radial-gradient(circle at 22% 18%, #1c2f5e 0%, #0f1c3f 55%, #0a1530 100%);
       padding: 24px;
     }
     .login-tarjeta {
@@ -182,7 +182,7 @@ const HTML = `<!DOCTYPE html>
       overflow: hidden;
       background:
         linear-gradient(180deg, rgba(15,28,63,0.25) 0%, rgba(15,28,63,0.85) 100%),
-        url('https://dojiw2m9tvv09.cloudfront.net/68984/1/L_mx-min-controla-inventario-ropa3495.jpg?3891&t=1750754531') center/cover no-repeat;
+        url('https://dojiw2m9tvv09.cloudfront.net/68984/1/L_mx-min-controla-inventario-ropa3495.jpg?3891&t=1750754531') 75% 20% / cover no-repeat;
     }
     .login-visual-contenido { position: relative; color: white; }
     .login-visual-contenido h1 { font-size: 2.6rem; font-weight: 800; margin-bottom: 10px; }
