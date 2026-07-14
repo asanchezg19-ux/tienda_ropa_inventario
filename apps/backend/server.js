@@ -708,24 +708,28 @@ app.use((req, res) => {
 
 // ═══════════════════════════════════════════════════════════════
 //  INICIO DEL SERVIDOR
+//  En AWS Lambda, module.exports.handler debe quedar asignado de
+//  forma síncrona al cargar el módulo: el runtime lo busca justo
+//  después del require(), antes de que una función async pueda
+//  resolverse. Por eso se exporta aquí arriba, fuera de arrancar().
 // ═══════════════════════════════════════════════════════════════
 async function arrancar() {
   await inicializarDatos(); // Espera a que los archivos iniciales se comprueben
-  
-  if (db.IS_LOCAL) {
-    // Procesa la cola cada 30 segundos solo en ambiente local
-    setInterval(procesarColaPendiente, 30000);
-    
-    app.listen(PORT, "::", () => {
-      logger.info("Backend iniciado correctamente en Docker Local", { puerto: PORT });
-      actualizarGaugeStockCritico();
-      procesarColaPendiente();
-    });
-  } else {
-    // Configuración especial para AWS Lambda
-    const serverless = require("serverless-http");
-    module.exports.handler = serverless(app);
-  }
+
+  // Procesa la cola cada 30 segundos solo en ambiente local
+  setInterval(procesarColaPendiente, 30000);
+
+  app.listen(PORT, "::", () => {
+    logger.info("Backend iniciado correctamente en Docker Local", { puerto: PORT });
+    actualizarGaugeStockCritico();
+    procesarColaPendiente();
+  });
 }
 
-arrancar();
+if (db.IS_LOCAL) {
+  arrancar();
+} else {
+  // Configuración y exportación obligatoria para AWS Lambda
+  const serverless = require("serverless-http");
+  module.exports.handler = serverless(app);
+}
