@@ -114,28 +114,74 @@ const HTML = `<!DOCTYPE html>
     /* ── Login ── */
     #pantalla-login {
       display: flex;
+      min-height: 100vh;
+    }
+    .login-branding {
+      flex: 1;
+      display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
       background: linear-gradient(135deg, var(--primario) 0%, #34495e 100%);
+      color: white;
+      padding: 60px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    .login-branding::before, .login-branding::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+    }
+    .login-branding::before { width: 420px; height: 420px; top: -140px; right: -120px; }
+    .login-branding::after  { width: 300px; height: 300px; bottom: -100px; left: -80px; }
+    .login-branding-contenido { position: relative; max-width: 380px; }
+    .login-branding-icono { font-size: 3.5rem; margin-bottom: 16px; }
+    .login-branding-contenido h1 { font-size: 2rem; margin-bottom: 10px; }
+    .login-branding-contenido > p { font-size: 1rem; opacity: 0.85; margin-bottom: 32px; }
+    .login-branding-lista { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+    .login-branding-lista li { font-size: 0.92rem; opacity: 0.92; }
+
+    .login-formulario {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--fondo);
+      padding: 40px;
     }
     .login-card {
       background: var(--blanco);
-      border-radius: 12px;
-      padding: 40px;
+      border-radius: 16px;
+      padding: 44px;
       width: 100%;
       max-width: 380px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
     }
-    .login-card h1 {
+    .login-card h2 {
       color: var(--primario);
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       margin-bottom: 6px;
     }
     .login-card p {
       color: #636e72;
       font-size: 0.9rem;
       margin-bottom: 28px;
+    }
+    .input-icono { position: relative; }
+    .input-icono .icono {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      opacity: 0.55;
+      pointer-events: none;
+    }
+    .input-icono input { padding-left: 40px; }
+
+    @media (max-width: 800px) {
+      .login-branding { display: none; }
     }
 
     /* ── Formularios ── */
@@ -429,21 +475,41 @@ const HTML = `<!DOCTYPE html>
 <!--  PANTALLA DE LOGIN                                        -->
 <!-- ══════════════════════════════════════════════════════════ -->
 <div id="pantalla-login">
-  <div class="login-card">
-    <h1>🛍️ Tienda de Ropa</h1>
-    <p>Sistema de Gestión de Inventario</p>
-    <div class="campo">
-      <label for="inp-usuario">Usuario</label>
-      <input type="text" id="inp-usuario" placeholder="dueno o vendedor1" autocomplete="username" />
+  <div class="login-branding">
+    <div class="login-branding-contenido">
+      <div class="login-branding-icono">🛍️</div>
+      <h1>Tienda de Ropa</h1>
+      <p>Sistema de Gestión de Inventario</p>
+      <ul class="login-branding-lista">
+        <li>📦 Control de catálogo en tiempo real</li>
+        <li>🧾 Registro de ventas al instante</li>
+        <li>📊 Reportes y alertas para el dueño</li>
+      </ul>
     </div>
-    <div class="campo">
-      <label for="inp-password">Contraseña</label>
-      <input type="password" id="inp-password" placeholder="••••••••" autocomplete="current-password" />
+  </div>
+  <div class="login-formulario">
+    <div class="login-card">
+      <h2>Bienvenido de nuevo</h2>
+      <p>Ingresa tus credenciales para continuar</p>
+      <div class="campo">
+        <label for="inp-usuario">Usuario</label>
+        <div class="input-icono">
+          <span class="icono">👤</span>
+          <input type="text" id="inp-usuario" placeholder="dueno o vendedor1" autocomplete="username" />
+        </div>
+      </div>
+      <div class="campo">
+        <label for="inp-password">Contraseña</label>
+        <div class="input-icono">
+          <span class="icono">🔒</span>
+          <input type="password" id="inp-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+      </div>
+      <button class="btn btn-primario btn-bloque" id="btn-login" onclick="hacerLogin()">
+        Ingresar
+      </button>
+      <div class="mensaje" id="msg-login"></div>
     </div>
-    <button class="btn btn-primario btn-bloque" id="btn-login" onclick="hacerLogin()">
-      Ingresar
-    </button>
-    <div class="mensaje" id="msg-login"></div>
   </div>
 </div>
 
