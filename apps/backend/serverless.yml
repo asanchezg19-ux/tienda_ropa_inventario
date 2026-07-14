@@ -3,8 +3,9 @@ service: tienda-ropa-backend
 provider:
   name: aws
   runtime: nodejs18.x
-  region: us-east-1 
-  deploymentMethod: direct 
+  region: us-east-1
+  deploymentMethod: direct
+  logRetentionInDays: 180 # RNF-12: retencion explicita, minimo 90 dias exigidos
   iam:
     role:
       statements:
