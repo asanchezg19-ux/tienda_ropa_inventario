@@ -39,6 +39,13 @@ apps/backend/data/
 coverage/
 
 # ─────────────────────────────────────────────
+#  SERVERLESS FRAMEWORK — artefactos de despliegue
+#  Contienen ZIPs generados y variables de entorno
+#  (incluye secretos como JWT_SECRET) — nunca al repo.
+# ─────────────────────────────────────────────
+.serverless/
+
+# ─────────────────────────────────────────────
 #  DOCKER — archivos temporales
 # ─────────────────────────────────────────────
 .docker/
