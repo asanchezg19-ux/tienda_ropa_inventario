@@ -134,3 +134,62 @@ resources:
         TopicArn: !Ref TopicoAlertaStock
         Protocol: email
         Endpoint: anacrissanchezguzman@gmail.com
+
+    # RNF-01 / RNF-02: si el backend falla o responde lento, aviso automático
+    # por el mismo correo (reusa el tema de SNS ya confirmado).
+    AlarmaErroresBackend:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: tienda-ropa-backend-errores
+        AlarmDescription: "Más de 3 errores del backend en 5 minutos (RNF-01)"
+        Namespace: AWS/Lambda
+        MetricName: Errors
+        Dimensions:
+          - Name: FunctionName
+            Value: !Ref ApiLambdaFunction
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 3
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref TopicoAlertaStock
+
+    AlarmaLatenciaBackend:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: tienda-ropa-backend-lentitud
+        AlarmDescription: "Tiempo de respuesta promedio del backend supera los 3s del RNF-02"
+        Namespace: AWS/Lambda
+        MetricName: Duration
+        Dimensions:
+          - Name: FunctionName
+            Value: !Ref ApiLambdaFunction
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 3000
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref TopicoAlertaStock
+
+    AlarmaColaErroresVentas:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: tienda-ropa-ventas-dlq-con-mensajes
+        AlarmDescription: "Una venta fallo 3 veces y cayo en la DLQ, requiere revision manual (RNF-05 / RNF-01)"
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt ColaVentasDLQ.QueueName
+        Statistic: Maximum
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref TopicoAlertaStock
