@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, ScanCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, ScanCommand, PutCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 
 const IS_LOCAL = process.env.PERSISTENCE_MODE === "local";
 
@@ -32,18 +32,27 @@ async function guardarDatos(archivoLocal, nombreTablaAWS, datos, registroIndivid
   if (IS_LOCAL) {
     fs.writeFileSync(archivoLocal, JSON.stringify(datos, null, 2), "utf8");
   } else {
-    if (registroIndividualAWS) {
-      const command = new PutCommand({
-        TableName: nombreTablaAWS,
-        Item: registroIndividualAWS
-      });
-      await docClient.send(command);
+    if (!registroIndividualAWS) return;
+    // Puede ser un solo registro (alta/edición) o varios (ej. stock de
+    // varios productos afectados por una misma venta).
+    const registros = Array.isArray(registroIndividualAWS) ? registroIndividualAWS : [registroIndividualAWS];
+    for (const item of registros) {
+      await docClient.send(new PutCommand({ TableName: nombreTablaAWS, Item: item }));
     }
+  }
+}
+
+async function eliminarDato(archivoLocal, nombreTablaAWS, datosActualizados, idEliminado) {
+  if (IS_LOCAL) {
+    fs.writeFileSync(archivoLocal, JSON.stringify(datosActualizados, null, 2), "utf8");
+  } else {
+    await docClient.send(new DeleteCommand({ TableName: nombreTablaAWS, Key: { id: idEliminado } }));
   }
 }
 
 module.exports = {
   IS_LOCAL,
   obtenerDatos,
-  guardarDatos
+  guardarDatos,
+  eliminarDato
 };

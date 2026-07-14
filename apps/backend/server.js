@@ -126,7 +126,7 @@ async function leerJSON(archivo, valorPorDefecto) {
 async function escribirJSON(archivo, datos, registroIndividual = null) {
   try {
     if (archivo === INVENTARIO_FILE) {
-      await db.guardarDatos(INVENTARIO_FILE, "InventarioTienda", datos);
+      await db.guardarDatos(INVENTARIO_FILE, "InventarioTienda", datos, registroIndividual);
       return;
     }
     if (archivo === VENTAS_FILE) {
@@ -137,6 +137,20 @@ async function escribirJSON(archivo, datos, registroIndividual = null) {
   } catch (err) {
     logger.error("Error escribiendo datos", { archivo, error: err.message });
     contadorErrores.inc({ tipo: "escritura_datos" });
+    throw err;
+  }
+}
+
+async function eliminarJSON(archivo, datosActualizados, idEliminado) {
+  try {
+    if (archivo === INVENTARIO_FILE) {
+      await db.eliminarDato(INVENTARIO_FILE, "InventarioTienda", datosActualizados, idEliminado);
+      return;
+    }
+    fs.writeFileSync(archivo, JSON.stringify(datosActualizados, null, 2), "utf8");
+  } catch (err) {
+    logger.error("Error eliminando datos", { archivo, error: err.message });
+    contadorErrores.inc({ tipo: "eliminacion_datos" });
     throw err;
   }
 }
@@ -568,7 +582,7 @@ app.delete("/api/inventario/:id", autenticar, solodueno, async (req, res) => {
     return res.status(404).json({ error: "Producto no encontrado" });
   }
   const eliminado = inventario.splice(idx, 1)[0];
-  await escribirJSON(INVENTARIO_FILE, inventario); // 👈 Agrega await
+  await eliminarJSON(INVENTARIO_FILE, inventario, eliminado.id);
   logger.info("Producto eliminado del inventario", {
     productoId: eliminado.id,
     nombre: eliminado.nombre,
@@ -628,8 +642,10 @@ app.post("/api/ventas", autenticar, async (req, res) => {
   venta.total = parseFloat(venta.total.toFixed(2));
 
   try {
-    await escribirJSON(INVENTARIO_FILE, inventario); 
-    const ventas = await leerJSON(VENTAS_FILE, []); 
+    const idsAfectados = new Set(items.map(i => i.productoId));
+    const productosAfectados = inventario.filter(p => idsAfectados.has(p.id));
+    await escribirJSON(INVENTARIO_FILE, inventario, productosAfectados);
+    const ventas = await leerJSON(VENTAS_FILE, []);
     ventas.push(venta);
     await escribirJSON(VENTAS_FILE, ventas, venta); 
     contadorVentas.inc({ vendedor: req.usuario.usuario });
