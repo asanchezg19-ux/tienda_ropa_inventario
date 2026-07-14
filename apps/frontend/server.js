@@ -645,7 +645,12 @@ let modoEdicion = false;
 let bannerConexion = false;
 
 function apiUrl(path) {
-  return path;
+  // En AWS la app vive bajo un prefijo de stage (ej. /dev/); en local
+  // Docker vive en la raíz. Se antepone el primer segmento de la URL
+  // actual para que las rutas /api/... no pierdan ese prefijo.
+  const segmentos = window.location.pathname.split("/").filter(Boolean);
+  const prefijo = segmentos.length > 0 ? "/" + segmentos[0] : "";
+  return prefijo + path;
 }
 
 function verificarConexion() {
