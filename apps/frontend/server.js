@@ -162,14 +162,15 @@ const HTML = `<!DOCTYPE html>
     .input-icono { position: relative; }
     .input-icono .icono {
       position: absolute;
-      left: 14px;
+      left: 13px;
       top: 50%;
       transform: translateY(-50%);
-      font-size: 1rem;
-      opacity: 0.55;
+      color: #a4b0be;
       pointer-events: none;
     }
-    .input-icono input { padding-left: 40px; }
+    /* Más específico a propósito: ".campo input" (regla genérica, más abajo
+       en la hoja de estilos) no debe poder pisar este padding-left. */
+    .campo .input-icono input { padding-left: 42px; }
 
     /* Panel visual: degradado difuminado tipo "aurora", hecho solo con CSS */
     .login-visual {
@@ -502,19 +503,19 @@ const HTML = `<!DOCTYPE html>
     <div class="login-formulario">
       <div class="login-card">
         <div class="login-logo"><span class="icono-logo">🛍️</span> Tienda de Ropa</div>
-        <h2>Bienvenido de nuevo</h2>
+        <h2>Inicia sesión</h2>
         <p>Ingresa tus credenciales para continuar</p>
         <div class="campo">
           <label for="inp-usuario">Usuario</label>
           <div class="input-icono">
-            <span class="icono">👤</span>
+            <svg class="icono" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             <input type="text" id="inp-usuario" placeholder="dueno o vendedor1" autocomplete="username" />
           </div>
         </div>
         <div class="campo">
           <label for="inp-password">Contraseña</label>
           <div class="input-icono">
-            <span class="icono">🔒</span>
+            <svg class="icono" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <input type="password" id="inp-password" placeholder="••••••••" autocomplete="current-password" />
           </div>
         </div>
