@@ -133,4 +133,4 @@ resources:
       Properties:
         TopicArn: !Ref TopicoAlertaStock
         Protocol: email
-        Endpoint: asanchezg19@upao.edu.pe
+        Endpoint: anacrissanchezguzman@gmail.com
