@@ -14,6 +14,7 @@ const rateLimit    = require("express-rate-limit");
 const winston      = require("winston");
 const promClient   = require("prom-client");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
 
 require("dotenv").config();
 
@@ -24,7 +25,9 @@ const JWT_SECRET  = process.env.JWT_SECRET  || "tienda_ropa_secret_2026";
 const STOCK_MIN   = parseInt(process.env.STOCK_MINIMO || "3", 10);
 const AWS_REGION  = process.env.AWS_REGION  || "us-east-1";
 const BUCKET_IMAGENES = process.env.BUCKET_IMAGENES;
+const QUEUE_VENTAS_URL = process.env.QUEUE_VENTAS_URL;
 const s3Client    = new S3Client({ region: AWS_REGION });
+const sqsClient   = new SQSClient({ region: AWS_REGION });
 
 // Carpeta donde se guardan los datos JSON (volumen Docker)
 const DATA_DIR        = path.join(__dirname, "data");
@@ -268,34 +271,53 @@ function inicializarDatos() {
 
 // ═══════════════════════════════════════════════════════════════
 //  COLA DE VENTAS PENDIENTES — RNF-05
-//  Simula el comportamiento de Amazon SQS localmente.
-//  Si una venta falla al guardarse, se pone en cola y se reintenta.
-//  El procesador revisa la cola cada 30 segundos.
+//  Si una venta no se puede guardar (falla de DynamoDB), no se pierde:
+//  en la nube se encola en Amazon SQS y un Lambda aparte la reintenta;
+//  tras 3 intentos fallidos, SQS la mueve solo a la DLQ para revisión
+//  manual. En Docker local se simula con un archivo (no hay SQS).
 // ═══════════════════════════════════════════════════════════════
-async function encolarVenta(ventaData) {
-  const cola = await leerJSON(COLA_FILE, []); 
-  cola.push({
-    id: uuidv4(),
-    datos: ventaData,
-    intentos: 0,
-    creadoEn: new Date().toISOString()
-  });
-  await escribirJSON(COLA_FILE, cola); 
-  logger.warn("Venta encolada para reintento", { ventaId: ventaData.id });
+
+// Guarda la venta y el descuento de stock directamente en DynamoDB.
+// La usan tanto la ruta HTTP (intento original) como el reintento por SQS.
+// Es idempotente: si la venta ya existe, no la vuelve a insertar — así
+// un reintento de SQS no duplica una venta que en realidad sí se guardó.
+async function guardarVentaEnDB(venta, productosAfectados) {
+  await db.guardarDatos(INVENTARIO_FILE, "InventarioTienda", null, productosAfectados);
+  const ventasExistentes = await db.obtenerDatos(VENTAS_FILE, "VentasTienda", []);
+  const yaExiste = ventasExistentes.some(v => v.id === venta.id);
+  if (!yaExiste) {
+    await db.guardarDatos(VENTAS_FILE, "VentasTienda", null, venta);
+  }
 }
 
+async function encolarVenta(venta, productosAfectados) {
+  if (db.IS_LOCAL) {
+    const cola = await leerJSON(COLA_FILE, []);
+    cola.push({ id: uuidv4(), datos: venta, intentos: 0, creadoEn: new Date().toISOString() });
+    await escribirJSON(COLA_FILE, cola);
+    logger.warn("Venta encolada localmente para reintento", { ventaId: venta.id });
+    return;
+  }
+  await sqsClient.send(new SendMessageCommand({
+    QueueUrl: QUEUE_VENTAS_URL,
+    MessageBody: JSON.stringify({ venta, productosAfectados })
+  }));
+  logger.warn("Venta encolada en SQS para reintento", { ventaId: venta.id });
+}
+
+// Solo aplica en modo local: reintenta cada 30s escribiendo al archivo.
 async function procesarColaPendiente() {
-  const cola = await leerJSON(COLA_FILE, []); 
+  const cola = await leerJSON(COLA_FILE, []);
   if (cola.length === 0) return;
   logger.info("Procesando cola de ventas pendientes", { pendientes: cola.length });
   const pendientes = [];
   for (const item of cola) {
     try {
-      const ventas = await leerJSON(VENTAS_FILE, []); 
+      const ventas = await leerJSON(VENTAS_FILE, []);
       const yaExiste = ventas.find(v => v.id === item.datos.id);
       if (!yaExiste) {
         ventas.push(item.datos);
-        await escribirJSON(VENTAS_FILE, ventas); 
+        await escribirJSON(VENTAS_FILE, ventas);
         logger.info("Venta pendiente procesada exitosamente", {
           ventaId: item.datos.id,
           intentos: item.intentos + 1
@@ -318,11 +340,21 @@ async function procesarColaPendiente() {
       }
     }
   }
-  await escribirJSON(COLA_FILE, pendientes); 
+  await escribirJSON(COLA_FILE, pendientes);
 }
 
-// Procesa la cola cada 30 segundos
-setInterval(procesarColaPendiente, 30000);
+// Handler de Lambda disparado automáticamente por SQS (evento, no HTTP).
+// Si guardarVentaEnDB lanza un error, NO se atrapa a propósito: así SQS
+// sabe que el mensaje falló y lo reintenta (hasta 3 veces) antes de
+// moverlo solo a la DLQ.
+async function procesarColaVentas(event) {
+  for (const record of event.Records) {
+    const { venta, productosAfectados } = JSON.parse(record.body);
+    await guardarVentaEnDB(venta, productosAfectados);
+    logger.info("Venta reprocesada desde la cola SQS", { ventaId: venta.id });
+  }
+}
+module.exports.procesarColaVentas = procesarColaVentas;
 
 // ═══════════════════════════════════════════════════════════════
 //  ALERTA DE STOCK CRÍTICO — RNF-10 / RF
@@ -693,19 +725,24 @@ app.post("/api/ventas", autenticar, async (req, res) => {
   }
   venta.total = parseFloat(venta.total.toFixed(2));
 
+  const idsAfectados = new Set(items.map(i => i.productoId));
+  const productosAfectados = inventario.filter(p => idsAfectados.has(p.id));
+
   try {
-    const idsAfectados = new Set(items.map(i => i.productoId));
-    const productosAfectados = inventario.filter(p => idsAfectados.has(p.id));
-    await escribirJSON(INVENTARIO_FILE, inventario, productosAfectados);
-    const ventas = await leerJSON(VENTAS_FILE, []);
-    ventas.push(venta);
-    await escribirJSON(VENTAS_FILE, ventas, venta); 
+    if (db.IS_LOCAL) {
+      await escribirJSON(INVENTARIO_FILE, inventario, productosAfectados);
+      const ventas = await leerJSON(VENTAS_FILE, []);
+      ventas.push(venta);
+      await escribirJSON(VENTAS_FILE, ventas, venta);
+    } else {
+      await guardarVentaEnDB(venta, productosAfectados);
+    }
     contadorVentas.inc({ vendedor: req.usuario.usuario });
-    await actualizarGaugeStockCritico(); 
+    await actualizarGaugeStockCritico();
     logger.info("Venta registrada exitosamente", { ventaId: venta.id, total: venta.total, vendedor: venta.vendedor, items: venta.items.length });
     res.status(201).json(venta);
   } catch (err) {
-    await encolarVenta(venta); 
+    await encolarVenta(venta, productosAfectados);
     contadorErrores.inc({ tipo: "venta_encolada" });
     logger.error("Error al guardar venta, encolada para reintento", { ventaId: venta.id, error: err.message });
     res.status(202).json({ mensaje: "Venta recibida y en proceso. Será confirmada en breve.", ventaId: venta.id });

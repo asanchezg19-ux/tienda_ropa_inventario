@@ -25,26 +25,46 @@ provider:
             - s3:GetObject
           Resource:
             - arn:aws:s3:::tienda-ropa-imagenes-${aws:accountId}/*
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - arn:aws:sqs:us-east-1:${aws:accountId}:tienda-ropa-ventas-pendientes
+            - arn:aws:sqs:us-east-1:${aws:accountId}:tienda-ropa-ventas-dlq
   environment:
     PERSISTENCE_MODE: cloud
     JWT_SECRET: tienda_ropa_secret_2026
     STOCK_MINIMO: 3
     BUCKET_IMAGENES: tienda-ropa-imagenes-${aws:accountId}
+    QUEUE_VENTAS_URL: https://sqs.us-east-1.amazonaws.com/${aws:accountId}/tienda-ropa-ventas-pendientes
 
 functions:
   api:
-    handler: server.handler 
-    memorySize: 512 
-    timeout: 10 
+    handler: server.handler
+    memorySize: 512
+    timeout: 10
     events:
       - http:
           path: /
           method: any
           cors: true
       - http:
-          path: /{proxy+} 
+          path: /{proxy+}
           method: any
           cors: true
+
+  procesarColaVentas:
+    handler: server.procesarColaVentas
+    memorySize: 512
+    timeout: 15
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [ColaVentasPendientes, Arn]
+          batchSize: 1
 
 package:
   individually: true
@@ -77,3 +97,20 @@ resources:
               Principal: '*'
               Action: s3:GetObject
               Resource: !Sub '${BucketImagenes.Arn}/*'
+
+    # RNF-05: si una venta no se puede guardar, se encola aquí en vez de perderse.
+    # Tras 3 intentos fallidos (maxReceiveCount), SQS la mueve sola a la DLQ.
+    ColaVentasDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: tienda-ropa-ventas-dlq
+        MessageRetentionPeriod: 1209600 # 14 días, tiempo máximo para revisar manualmente
+
+    ColaVentasPendientes:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: tienda-ropa-ventas-pendientes
+        VisibilityTimeout: 60
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ColaVentasDLQ.Arn
+          maxReceiveCount: 3
