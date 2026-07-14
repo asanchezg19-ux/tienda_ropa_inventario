@@ -172,7 +172,7 @@ const HTML = `<!DOCTYPE html>
        en la hoja de estilos) no debe poder pisar este padding-left. */
     .campo .input-icono input { padding-left: 42px; }
 
-    /* Panel visual: degradado difuminado tipo "aurora", hecho solo con CSS */
+    /* Panel visual: foto de fondo + degradado oscuro encima para que el texto se lea bien */
     .login-visual {
       flex: 1;
       position: relative;
@@ -180,23 +180,9 @@ const HTML = `<!DOCTYPE html>
       align-items: flex-end;
       padding: 44px;
       overflow: hidden;
-      background: #101f45;
-    }
-    .login-visual::before {
-      content: "";
-      position: absolute;
-      inset: -25%;
       background:
-        radial-gradient(circle at 25% 25%, #ffd3a5 0%, transparent 45%),
-        radial-gradient(circle at 65% 15%, #fd6585 0%, transparent 50%),
-        radial-gradient(circle at 80% 65%, #4facfe 0%, transparent 50%),
-        radial-gradient(circle at 25% 80%, #7b2ff7 0%, transparent 55%);
-      filter: blur(70px) saturate(140%);
-      animation: auroraFlotar 14s ease-in-out infinite alternate;
-    }
-    @keyframes auroraFlotar {
-      0%   { transform: translate(0, 0) rotate(0deg) scale(1); }
-      100% { transform: translate(-4%, 3%) rotate(10deg) scale(1.08); }
+        linear-gradient(180deg, rgba(15,28,63,0.25) 0%, rgba(15,28,63,0.85) 100%),
+        url('https://dojiw2m9tvv09.cloudfront.net/68984/1/L_mx-min-controla-inventario-ropa3495.jpg?3891&t=1750754531') center/cover no-repeat;
     }
     .login-visual-contenido { position: relative; color: white; }
     .login-visual-contenido h1 { font-size: 2.6rem; font-weight: 800; margin-bottom: 10px; }
