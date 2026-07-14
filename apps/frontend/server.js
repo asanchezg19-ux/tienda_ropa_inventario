@@ -562,11 +562,12 @@ const HTML = `<!DOCTYPE html>
     <input type="hidden" id="mp-id" />
     <input type="hidden" id="mp-imagen-url" />
     <div class="campo">
-      <label>Imagen del producto</label>
+      <label>Imagen del producto (foto por defecto)</label>
       <input type="file" id="mp-imagen-input" accept="image/*" onchange="previsualizarImagen(event)" />
       <div id="mp-imagen-preview-wrap" style="margin-top:10px; display:none;">
         <img id="mp-imagen-preview" alt="Vista previa" style="max-width:100%; max-height:160px; border-radius:8px; display:block; object-fit:contain;" />
       </div>
+      <p style="font-size:0.8rem; color:#636e72; margin-top:6px;">Si un color tiene su propia foto (abajo), esa se usa en vez de esta.</p>
     </div>
     <div class="campo">
       <label>Nombre *</label>
@@ -629,8 +630,9 @@ const HTML = `<!DOCTYPE html>
       </div>
       <div class="campo">
         <label>Colores (opcional — agrega uno o varios)</label>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="mp-color-nuevo" placeholder="Ej: Azul marino" />
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="mp-color-nuevo" placeholder="Ej: Dorado" style="flex:1; min-width:140px;" />
+          <input type="file" id="mp-color-imagen-nuevo" accept="image/*" title="Foto propia de este color (opcional)" style="max-width:220px;" />
           <button type="button" class="btn btn-primario" onclick="agregarColor()">+ Agregar</button>
         </div>
         <div id="mp-colores-chips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;"></div>
@@ -1169,6 +1171,7 @@ function abrirModalProducto(producto) {
 
   document.querySelectorAll("#mp-tallas-check input[type=checkbox]").forEach(chk => chk.checked = false);
   document.getElementById("mp-color-nuevo").value = "";
+  document.getElementById("mp-color-imagen-nuevo").value = "";
   renderColoresChips();
   renderCombinaciones();
 
@@ -1188,20 +1191,34 @@ function obtenerTallasSeleccionadas() {
 }
 
 function agregarColor() {
-  const input = document.getElementById("mp-color-nuevo");
-  const color = input.value.trim();
-  if (!color || coloresSeleccionados.includes(color)) {
-    input.value = "";
+  const inputNombre = document.getElementById("mp-color-nuevo");
+  const inputImagen = document.getElementById("mp-color-imagen-nuevo");
+  const nombre = inputNombre.value.trim();
+  if (!nombre || coloresSeleccionados.some(c => c.nombre === nombre)) {
+    inputNombre.value = "";
     return;
   }
-  coloresSeleccionados.push(color);
-  input.value = "";
-  renderColoresChips();
-  renderCombinaciones();
+
+  const finalizar = (imagenBase64) => {
+    coloresSeleccionados.push({ nombre, imagenBase64 });
+    inputNombre.value = "";
+    inputImagen.value = "";
+    renderColoresChips();
+    renderCombinaciones();
+  };
+
+  const archivo = inputImagen.files[0];
+  if (!archivo) {
+    finalizar(null);
+    return;
+  }
+  const lector = new FileReader();
+  lector.onload = () => finalizar(lector.result);
+  lector.readAsDataURL(archivo);
 }
 
-function quitarColor(color) {
-  coloresSeleccionados = coloresSeleccionados.filter(c => c !== color);
+function quitarColor(nombre) {
+  coloresSeleccionados = coloresSeleccionados.filter(c => c.nombre !== nombre);
   renderColoresChips();
   renderCombinaciones();
 }
@@ -1212,17 +1229,18 @@ function renderColoresChips() {
     cont.innerHTML = '<span style="font-size:0.85rem; color:#636e72;">Sin colores agregados (el producto se creará sin color específico)</span>';
     return;
   }
-  cont.innerHTML = coloresSeleccionados.map(color => \`
+  cont.innerHTML = coloresSeleccionados.map(c => \`
     <span style="background:#eaf4fb; color:#2980b9; padding:4px 10px; border-radius:20px; font-size:0.85rem; display:flex; align-items:center; gap:6px;">
-      \${color}
-      <button type="button" onclick="quitarColor('\${color}')" style="border:none; background:none; color:#2980b9; cursor:pointer; font-weight:700;">✕</button>
+      \${c.imagenBase64 ? \`<img src="\${c.imagenBase64}" style="width:18px; height:18px; border-radius:50%; object-fit:cover;" />\` : ""}
+      \${c.nombre}
+      <button type="button" onclick="quitarColor('\${c.nombre}')" style="border:none; background:none; color:#2980b9; cursor:pointer; font-weight:700;">✕</button>
     </span>\`).join("");
 }
 
 function renderCombinaciones() {
   const cont    = document.getElementById("mp-combinaciones-tabla");
   const tallas  = obtenerTallasSeleccionadas();
-  const colores = coloresSeleccionados.length > 0 ? coloresSeleccionados : [""];
+  const colores = coloresSeleccionados.length > 0 ? coloresSeleccionados : [{ nombre: "" }];
 
   // Guarda lo ya escrito antes de reconstruir la tabla
   document.querySelectorAll(".mp-combo-stock").forEach(inp => {
@@ -1237,13 +1255,13 @@ function renderCombinaciones() {
   const filas = [];
   for (const talla of tallas) {
     for (const color of colores) {
-      const clave = talla + "|" + color;
-      const etiqueta = color ? \`Talla \${talla} · \${color}\` : \`Talla \${talla}\`;
+      const clave = talla + "|" + color.nombre;
+      const etiqueta = color.nombre ? \`Talla \${talla} · \${color.nombre}\` : \`Talla \${talla}\`;
       const valorPrevio = stockCombinaciones[clave] || "";
       filas.push(\`
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
           <span>\${etiqueta}</span>
-          <input type="number" min="0" class="mp-combo-stock" data-clave="\${clave}" data-talla="\${talla}" data-color="\${color}"
+          <input type="number" min="0" class="mp-combo-stock" data-clave="\${clave}" data-talla="\${talla}" data-color="\${color.nombre}"
                  value="\${valorPrevio}" placeholder="Stock" style="width:110px; padding:6px 10px; border:1.5px solid var(--borde); border-radius:6px;" />
         </div>\`);
     }
@@ -1263,14 +1281,11 @@ function previsualizarImagen(event) {
   lector.readAsDataURL(archivo);
 }
 
-async function subirImagenSiHaceFalta() {
-  if (!imagenBase64Pendiente) {
-    return document.getElementById("mp-imagen-url").value || "";
-  }
+async function subirImagen(base64) {
   const resp = await fetch(apiUrl("/api/inventario/imagenes"), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + TOKEN },
-    body: JSON.stringify({ imagenBase64: imagenBase64Pendiente })
+    body: JSON.stringify({ imagenBase64: base64 })
   });
   const data = await resp.json();
   if (!resp.ok) {
@@ -1320,7 +1335,7 @@ async function guardarProducto() {
       stockCombinaciones[inp.dataset.clave] = inp.value;
     });
     const tallas  = obtenerTallasSeleccionadas();
-    const colores = coloresSeleccionados.length > 0 ? coloresSeleccionados : [""];
+    const colores = coloresSeleccionados.length > 0 ? coloresSeleccionados : [{ nombre: "" }];
     if (tallas.length === 0) {
       mostrarMensaje("msg-modal", "Selecciona al menos una talla", "error");
       return;
@@ -1328,13 +1343,13 @@ async function guardarProducto() {
     combinaciones = [];
     for (const talla of tallas) {
       for (const color of colores) {
-        const stockTexto = stockCombinaciones[talla + "|" + color];
+        const stockTexto = stockCombinaciones[talla + "|" + color.nombre];
         const stock = parseInt(stockTexto, 10);
         if (stockTexto === undefined || stockTexto === "" || isNaN(stock) || stock < 0) {
-          mostrarMensaje("msg-modal", "Completa el stock de todas las combinaciones (talla " + talla + (color ? " · " + color : "") + ")", "error");
+          mostrarMensaje("msg-modal", "Completa el stock de todas las combinaciones (talla " + talla + (color.nombre ? " · " + color.nombre : "") + ")", "error");
           return;
         }
-        combinaciones.push({ talla, color, stock });
+        combinaciones.push({ talla, color: color.nombre, stock, imagenColorBase64: color.imagenBase64 });
       }
     }
   }
@@ -1343,22 +1358,34 @@ async function guardarProducto() {
   const textoOriginalBtn = btnGuardar.textContent;
 
   try {
+    btnGuardar.disabled = true;
+
+    // Imagen por defecto del producto (se usa cuando un color no trae la suya propia)
+    let imagenPorDefecto = document.getElementById("mp-imagen-url").value || "";
     if (imagenBase64Pendiente) {
-      btnGuardar.disabled = true;
       btnGuardar.textContent = "Subiendo imagen...";
+      imagenPorDefecto = await subirImagen(imagenBase64Pendiente);
     }
-    const imagen = await subirImagenSiHaceFalta();
 
     if (modoEdicion) {
       btnGuardar.textContent = "Guardando...";
       await guardarUnProducto(apiUrl("/api/inventario/" + id), "PUT",
-        { nombre, categoria, precio, imagen, ...combinaciones[0] });
+        { nombre, categoria, precio, imagen: imagenPorDefecto, ...combinaciones[0] });
     } else {
+      const urlImagenPorColor = {}; // evita subir dos veces la misma foto de un color
       for (let i = 0; i < combinaciones.length; i++) {
-        btnGuardar.disabled = true;
+        const combo = combinaciones[i];
+        let imagen = imagenPorDefecto;
+        if (combo.imagenColorBase64) {
+          if (!urlImagenPorColor[combo.color]) {
+            btnGuardar.textContent = \`Subiendo foto de \${combo.color}...\`;
+            urlImagenPorColor[combo.color] = await subirImagen(combo.imagenColorBase64);
+          }
+          imagen = urlImagenPorColor[combo.color];
+        }
         btnGuardar.textContent = \`Guardando \${i + 1} de \${combinaciones.length}...\`;
         await guardarUnProducto(apiUrl("/api/inventario"), "POST",
-          { nombre, categoria, precio, imagen, ...combinaciones[i] });
+          { nombre, categoria, precio, imagen, talla: combo.talla, color: combo.color, stock: combo.stock });
       }
     }
 
