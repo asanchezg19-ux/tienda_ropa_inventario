@@ -13,6 +13,7 @@ const path         = require("path");
 const rateLimit    = require("express-rate-limit");
 const winston      = require("winston");
 const promClient   = require("prom-client");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 require("dotenv").config();
 
@@ -21,12 +22,16 @@ const db          = require("./db");
 const PORT        = process.env.PORT        || 4000;
 const JWT_SECRET  = process.env.JWT_SECRET  || "tienda_ropa_secret_2026";
 const STOCK_MIN   = parseInt(process.env.STOCK_MINIMO || "3", 10);
+const AWS_REGION  = process.env.AWS_REGION  || "us-east-1";
+const BUCKET_IMAGENES = process.env.BUCKET_IMAGENES;
+const s3Client    = new S3Client({ region: AWS_REGION });
 
 // Carpeta donde se guardan los datos JSON (volumen Docker)
 const DATA_DIR        = path.join(__dirname, "data");
 const INVENTARIO_FILE = path.join(DATA_DIR, "inventario.json");
 const VENTAS_FILE     = path.join(DATA_DIR, "ventas.json");
 const COLA_FILE       = path.join(DATA_DIR, "cola_pendiente.json");
+const IMAGENES_DIR    = path.join(DATA_DIR, "imagenes");
 
 // ═══════════════════════════════════════════════════════════════
 //  LOGGER WINSTON — RNF-09 (logs estructurados en JSON)
@@ -354,7 +359,11 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: "1mb" }));
+// Límite ampliado para admitir imágenes de producto en base64 (RF: imágenes reales)
+app.use(express.json({ limit: "8mb" }));
+
+// Sirve las imágenes subidas en modo local (Docker); en la nube se sirven desde S3
+app.use("/uploads/imagenes", express.static(IMAGENES_DIR));
 
 // Middleware para medir tiempo de respuesta (RNF-02 / Prometheus)
 app.use((req, res, next) => {
@@ -495,6 +504,49 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
       rol: user.rol
     }
   });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SUBIDA DE IMÁGENES DE PRODUCTO — solo dueño
+//  Recibe la imagen como data URL en base64, la guarda (S3 en la
+//  nube, disco local en Docker) y devuelve la URL pública.
+// ═══════════════════════════════════════════════════════════════
+app.post("/api/inventario/imagenes", autenticar, solodueno, async (req, res) => {
+  const { imagenBase64 } = req.body;
+  if (!imagenBase64) {
+    return res.status(400).json({ error: "Se requiere la imagen (imagenBase64)" });
+  }
+
+  const match = /^data:(image\/\w+);base64,(.+)$/.exec(imagenBase64);
+  if (!match) {
+    return res.status(400).json({ error: "Formato de imagen inválido, se espera una data URL base64" });
+  }
+  const [, contentType, base64Data] = match;
+  const extension = contentType.split("/")[1];
+  const buffer = Buffer.from(base64Data, "base64");
+  const nombreArchivo = `${uuidv4()}.${extension}`;
+
+  try {
+    if (db.IS_LOCAL) {
+      if (!fs.existsSync(IMAGENES_DIR)) fs.mkdirSync(IMAGENES_DIR, { recursive: true });
+      fs.writeFileSync(path.join(IMAGENES_DIR, nombreArchivo), buffer);
+      return res.status(201).json({ url: `/uploads/imagenes/${nombreArchivo}` });
+    }
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: BUCKET_IMAGENES,
+      Key: `productos/${nombreArchivo}`,
+      Body: buffer,
+      ContentType: contentType
+    }));
+    const url = `https://${BUCKET_IMAGENES}.s3.${AWS_REGION}.amazonaws.com/productos/${nombreArchivo}`;
+    logger.info("Imagen de producto subida", { archivo: nombreArchivo, por: req.usuario.usuario });
+    res.status(201).json({ url });
+  } catch (err) {
+    logger.error("Error subiendo imagen de producto", { error: err.message });
+    contadorErrores.inc({ tipo: "subida_imagen" });
+    res.status(500).json({ error: "No se pudo subir la imagen" });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════

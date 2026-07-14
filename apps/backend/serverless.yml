@@ -18,11 +18,18 @@ provider:
             - dynamodb:DeleteItem
           Resource:
             - arn:aws:dynamodb:us-east-1:*:table/InventarioTienda
-            - arn:aws:dynamodb:us-east-1:*:table/VentasTienda 
+            - arn:aws:dynamodb:us-east-1:*:table/VentasTienda
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::tienda-ropa-imagenes-${aws:accountId}/*
   environment:
-    PERSISTENCE_MODE: cloud   
+    PERSISTENCE_MODE: cloud
     JWT_SECRET: tienda_ropa_secret_2026
     STOCK_MINIMO: 3
+    BUCKET_IMAGENES: tienda-ropa-imagenes-${aws:accountId}
 
 functions:
   api:
@@ -43,3 +50,30 @@ package:
   individually: true
   patterns:
     - '!node_modules/nodemon/**'
+
+resources:
+  Resources:
+    BucketImagenes:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: tienda-ropa-imagenes-${aws:accountId}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins: ['*']
+              AllowedMethods: [GET]
+              AllowedHeaders: ['*']
+    BucketImagenesPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref BucketImagenes
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal: '*'
+              Action: s3:GetObject
+              Resource: !Sub '${BucketImagenes.Arn}/*'
