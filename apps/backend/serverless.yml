@@ -34,12 +34,18 @@ provider:
           Resource:
             - arn:aws:sqs:us-east-1:${aws:accountId}:tienda-ropa-ventas-pendientes
             - arn:aws:sqs:us-east-1:${aws:accountId}:tienda-ropa-ventas-dlq
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - arn:aws:sns:us-east-1:${aws:accountId}:tienda-ropa-alerta-stock
   environment:
     PERSISTENCE_MODE: cloud
     JWT_SECRET: tienda_ropa_secret_2026
     STOCK_MINIMO: 3
     BUCKET_IMAGENES: tienda-ropa-imagenes-${aws:accountId}
     QUEUE_VENTAS_URL: https://sqs.us-east-1.amazonaws.com/${aws:accountId}/tienda-ropa-ventas-pendientes
+    TOPIC_ALERTA_STOCK_ARN: arn:aws:sns:us-east-1:${aws:accountId}:tienda-ropa-alerta-stock
 
 functions:
   api:
@@ -114,3 +120,17 @@ resources:
         RedrivePolicy:
           deadLetterTargetArn: !GetAtt ColaVentasDLQ.Arn
           maxReceiveCount: 3
+
+    # RNF-10: aviso al dueño cuando un producto queda en stock crítico.
+    # SNS entrega el correo en segundos, muy por debajo del límite de 60s.
+    TopicoAlertaStock:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: tienda-ropa-alerta-stock
+
+    SuscripcionCorreoAlertaStock:
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: !Ref TopicoAlertaStock
+        Protocol: email
+        Endpoint: asanchezg19@upao.edu.pe

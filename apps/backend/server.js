@@ -15,6 +15,7 @@ const winston      = require("winston");
 const promClient   = require("prom-client");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { SQSClient, SendMessageCommand } = require("@aws-sdk/client-sqs");
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 
 require("dotenv").config();
 
@@ -26,8 +27,10 @@ const STOCK_MIN   = parseInt(process.env.STOCK_MINIMO || "3", 10);
 const AWS_REGION  = process.env.AWS_REGION  || "us-east-1";
 const BUCKET_IMAGENES = process.env.BUCKET_IMAGENES;
 const QUEUE_VENTAS_URL = process.env.QUEUE_VENTAS_URL;
+const TOPIC_ALERTA_STOCK_ARN = process.env.TOPIC_ALERTA_STOCK_ARN;
 const s3Client    = new S3Client({ region: AWS_REGION });
 const sqsClient   = new SQSClient({ region: AWS_REGION });
+const snsClient   = new SNSClient({ region: AWS_REGION });
 
 // Carpeta donde se guardan los datos JSON (volumen Docker)
 const DATA_DIR        = path.join(__dirname, "data");
@@ -357,23 +360,36 @@ async function procesarColaVentas(event) {
 module.exports.procesarColaVentas = procesarColaVentas;
 
 // ═══════════════════════════════════════════════════════════════
-//  ALERTA DE STOCK CRÍTICO — RNF-10 / RF
-//  Cuando el stock baja de STOCK_MIN (3 unidades),
-//  se emite un log de nivel "warn" con tipo "ALERTA_STOCK".
-//  Grafana/Loki puede mostrar estas alertas en un panel.
-//  En AWS real esto dispararía SNS → email al dueño.
+//  ALERTA DE STOCK CRÍTICO — RNF-10
+//  Cuando el stock baja de STOCK_MIN (3 unidades), se registra el log
+//  Y se publica en SNS, que le manda un correo al dueño en segundos
+//  (bien por debajo del límite de 60s). No se usa CloudWatch Alarm
+//  porque esas evalúan cada 1-5 min, muy lento para este RNF.
 // ═══════════════════════════════════════════════════════════════
-function verificarStockCritico(producto) {
-  if (producto.stock <= STOCK_MIN) {
-    logger.warn("ALERTA_STOCK: producto bajo nivel mínimo", {
-      tipo: "ALERTA_STOCK",
-      productoId: producto.id,
-      nombre: producto.nombre,
-      talla: producto.talla,
-      stockActual: producto.stock,
-      stockMinimo: STOCK_MIN,
-      timestamp: new Date().toISOString()
-    });
+async function verificarStockCritico(producto) {
+  if (producto.stock > STOCK_MIN) return;
+
+  logger.warn("ALERTA_STOCK: producto bajo nivel mínimo", {
+    tipo: "ALERTA_STOCK",
+    productoId: producto.id,
+    nombre: producto.nombre,
+    talla: producto.talla,
+    stockActual: producto.stock,
+    stockMinimo: STOCK_MIN,
+    timestamp: new Date().toISOString()
+  });
+
+  if (db.IS_LOCAL) return; // no hay SNS en Docker local
+
+  try {
+    await snsClient.send(new PublishCommand({
+      TopicArn: TOPIC_ALERTA_STOCK_ARN,
+      Subject: `Stock crítico: ${producto.nombre}`,
+      Message: `El producto "${producto.nombre}" (talla ${producto.talla}${producto.color ? ", color " + producto.color : ""}) quedó con ${producto.stock} unidad(es), por debajo del mínimo de ${STOCK_MIN}.`
+    }));
+  } catch (err) {
+    logger.error("No se pudo enviar la alerta de stock por SNS", { productoId: producto.id, error: err.message });
+    contadorErrores.inc({ tipo: "alerta_stock_fallida" });
   }
 }
 
@@ -623,8 +639,8 @@ app.post("/api/inventario", autenticar, solodueno, async (req, res) => {
     creadoPor: req.usuario.usuario
   };
   inventario.push(nuevo);
-  await escribirJSON(INVENTARIO_FILE, inventario, nuevo); // 
-  verificarStockCritico(nuevo);
+  await escribirJSON(INVENTARIO_FILE, inventario, nuevo); //
+  await verificarStockCritico(nuevo);
   logger.info("Producto agregado al inventario", {
     productoId: nuevo.id,
     nombre: nuevo.nombre,
@@ -648,8 +664,8 @@ app.put("/api/inventario/:id", autenticar, solodueno, async (req, res) => {
     modificadoPor: req.usuario.usuario
   };
   inventario[idx] = actualizado;
-  await escribirJSON(INVENTARIO_FILE, inventario, actualizado); 
-  verificarStockCritico(actualizado);
+  await escribirJSON(INVENTARIO_FILE, inventario, actualizado);
+  await verificarStockCritico(actualizado);
   logger.info("Producto actualizado", {
     productoId: actualizado.id,
     nombre: actualizado.nombre,
@@ -721,7 +737,7 @@ app.post("/api/ventas", autenticar, async (req, res) => {
     });
     venta.total += subtotal;
     inventario[idx].stock -= item.cantidad;
-    verificarStockCritico(inventario[idx]);
+    await verificarStockCritico(inventario[idx]);
   }
   venta.total = parseFloat(venta.total.toFixed(2));
 
