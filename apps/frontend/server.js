@@ -37,7 +37,7 @@ async function reenviarAPI(req, res, rutaBackend) {
       headers["content-type"] = "application/json";
     }
 
-    const response = await fetch(new URL(rutaBackend, BACKEND_URL), {
+    const response = await fetch(`${BACKEND_URL}${rutaBackend}`, {
       method: req.method,
       headers,
       body: body !== undefined ? body : undefined
@@ -645,9 +645,7 @@ let modoEdicion = false;
 let bannerConexion = false;
 
 function apiUrl(path) {
-  return (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-    ? "http://localhost:4000" + path
-    : path;
+  return path;
 }
 
 function verificarConexion() {
@@ -1166,6 +1164,10 @@ function cerrarSesion() {
 // Servir la SPA solo en la ruta raíz; las rutas /api deben pasar al backend.
 app.get("/", (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  // Si estamos en la nube, forzamos un formato estructurado para API Gateway
+  if (process.env.LAMBDA_TASK_ROOT) {
+    return res.status(200).send(HTML);
+  }
   res.send(HTML);
 });
 
@@ -1174,16 +1176,28 @@ app.get("*", (req, res) => {
     return res.status(404).json({ error: "Ruta no encontrada" });
   }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  if (process.env.LAMBDA_TASK_ROOT) {
+    return res.status(200).send(HTML);
+  }
   res.send(HTML);
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    nivel: "info",
-    servicio: "tienda-frontend",
-    mensaje: "Frontend iniciado",
-    puerto: PORT,
-    backendUrl: BACKEND_URL
-  }));
-});
+const IS_LOCAL_FRONTEND = process.env.BACKEND_URL && process.env.BACKEND_URL.includes("backend:4000") || !process.env.LAMBDA_TASK_ROOT;
+
+if (IS_LOCAL_FRONTEND) {
+  // Se ejecuta de manera tradicional si usas Docker Desktop
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      nivel: "info",
+      servicio: "tienda-frontend",
+      mensaje: "Frontend iniciado en Docker Local",
+      puerto: PORT,
+      backendUrl: BACKEND_URL
+    }));
+  });
+} else {
+  // Configuración y exportación especial obligatoria para AWS Lambda
+  const serverless = require("serverless-http");
+  module.exports.handler = serverless(app);
+}

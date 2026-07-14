@@ -1,0 +1,30 @@
+service: tienda-ropa-frontend
+
+org: tiendainventario
+app: tienda-ropa-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  deploymentMethod: direct
+  apiGateway:
+    binaryMediaTypes:
+      - '*/*'
+  environment:
+    NODE_ENV: production
+    PORT: 3000
+    BACKEND_URL: https://nq1m0cwzni.execute-api.us-east-1.amazonaws.com/dev
+
+functions:
+  ui:
+    handler: server.handler # Asumiendo que tu frontend exporta el handler al final como el backend
+    memorySize: 512
+    timeout: 10
+    events:
+      - http:
+          path: /
+          method: any
+      - http:
+          path: /{proxy+}
+          method: any
