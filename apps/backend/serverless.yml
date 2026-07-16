@@ -42,7 +42,7 @@ provider:
             - arn:aws:sns:us-east-1:${aws:accountId}:tienda-ropa-alerta-stock
   environment:
     PERSISTENCE_MODE: cloud
-    JWT_SECRET: tienda_ropa_secret_2026
+    JWT_SECRET: ${ssm:/tienda-ropa/jwt-secret~true}
     STOCK_MINIMO: 3
     BUCKET_IMAGENES: tienda-ropa-imagenes-${aws:accountId}
     QUEUE_VENTAS_URL: https://sqs.us-east-1.amazonaws.com/${aws:accountId}/tienda-ropa-ventas-pendientes

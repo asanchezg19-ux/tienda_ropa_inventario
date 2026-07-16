@@ -112,7 +112,7 @@ services:
       NODE_ENV: production
       PERSISTENCE_MODE: local
       PORT: 4000
-      JWT_SECRET: tienda_ropa_secret_2026
+      JWT_SECRET: ${JWT_SECRET}
       STOCK_MINIMO: 3
     volumes:
       - backend-data:/app/data
