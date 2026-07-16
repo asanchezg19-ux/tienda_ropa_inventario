@@ -1,21 +1,18 @@
 // ═══════════════════════════════════════════════════════════════
 //  HEALTHCHECK.JS
 //  Script independiente usado por Docker para verificar
-//  que el backend está respondiendo correctamente.
+//  que el frontend está respondiendo correctamente.
 //
 //  Se ejecuta con: node healthcheck.js
-//  Sale con código 0 si el backend responde 200, 1 en caso contrario.
-//  Se usa un archivo separado (en vez de un script inline en el
-//  docker-compose.yml) porque el formato CMD exec-array de Docker
-//  no parsea bien comillas anidadas dentro de un solo argumento.
+//  Sale con código 0 si el frontend responde 200, 1 en caso contrario.
 // ═══════════════════════════════════════════════════════════════
 
 const http = require("http");
 
 const opciones = {
   host: "127.0.0.1",
-  port: process.env.PORT || 4000,
-  path: "/api/health",
+  port: process.env.PORT || 3000,
+  path: "/",
   timeout: 4000
 };
 

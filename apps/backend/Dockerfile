@@ -42,5 +42,9 @@ COPY --chown=node:node . .
 # Puerto que expone el backend
 EXPOSE 4000
 
+# Verifica cada 30s que /api/health responda 200 (usa healthcheck.js)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node healthcheck.js
+
 # Comando de inicio
 CMD ["node", "server.js"]
