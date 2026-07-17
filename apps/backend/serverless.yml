@@ -80,14 +80,40 @@ package:
 
 resources:
   Resources:
+    # Bucket destino de los logs de acceso de BucketImagenes. No se loguea a si
+    # mismo (CKV_AWS_18 seguira apareciendo aqui a proposito) y queda totalmente
+    # privado y versionado.
+    BucketImagenesLogs:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: tienda-ropa-imagenes-logs-${aws:accountId}
+        AccessControl: LogDeliveryWrite
+        VersioningConfiguration:
+          Status: Enabled
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+
     BucketImagenes:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: tienda-ropa-imagenes-${aws:accountId}
+        LoggingConfiguration:
+          DestinationBucketName: !Ref BucketImagenesLogs
+          LogFilePrefix: acceso-imagenes/
+        VersioningConfiguration:
+          Status: Enabled
         PublicAccessBlockConfiguration:
-          BlockPublicAcls: false
+          # BlockPublicPolicy y RestrictPublicBuckets quedan en false a proposito
+          # (CKV_AWS_54 y CKV_AWS_56 seguiran apareciendo aqui a proposito):
+          # BucketImagenesPolicy (abajo) da lectura publica intencional para las
+          # fotos de producto. Activarlos rompe esa policy y las imagenes dejan
+          # de cargar en la tienda.
+          BlockPublicAcls: true
           BlockPublicPolicy: false
-          IgnorePublicAcls: false
+          IgnorePublicAcls: true
           RestrictPublicBuckets: false
         CorsConfiguration:
           CorsRules:
